@@ -11,24 +11,48 @@ from .encoder import VariableDownsample
 class SpacetimeformerEmbedding(nn.Module):
     def __init__(
         self,
-        d_y,
-        d_x,
-        d_model=256,
-        time_emb_dim=6,
-        method="spatio-temporal",
-        downsample_convs=1,
-        start_token_len=0,
-        null_value=None,
+        d_y,      # dimension of the output
+        d_x,        # dimension of the input
+        d_model=256,    # dimension of the model
+        time_emb_dim=6, # dimension of the time embedding
+        method="spatio-temporal",   # method to use for embedding
+        downsample_convs=1,     # number of downsampling convolutions
+        start_token_len=0,      # length of the start token
+        null_value=None,        # value to use for null values
+
+        
     ):
         super().__init__()
 
-        assert method in ["spatio-temporal", "temporal"]
+        # create one hot encoding for events
+        events_ohe_lookup_table = {}
+
+        # _motor_event = ['Start_RT','Start_FT', 'Fault_RT', 'Fault_FT']
+        # _axis_events = ['TargetChange_RT', 'TargetChange_FT', 'VeloChange_RT', 'VeloChange_FT', 'ERR_RT', 'ERR_FT', 'Start_RT', 'Start_FT', 'Halt_RT', 'Halt_FT', 'Reset_RT', 'Reset_FT']
+        # _freqConv_events = ['TargetVeloReached_RT', 'Start_RT', 'Start_FT', 'TargetVeloReached_FT', 'RelBrake_RT', 'RelBrake_FT', 'CW', 'Error', 'nErrorCode']
+
+        # # unique events
+        # _events = list(set(_motor_event + _axis_events + _freqConv_events))
+        
+        # idx = 0
+
+        # for x in _events:
+        #     events_ohe_lookup_table[x] = idx
+        #     idx += 1
+
+        # self.events_ohe_lookup_table = events_ohe_lookup_table
+
+        
+
+
+        assert method in ["spatio-temporal-event", "spatio-temporal", "temporal"]
         self.method = method
 
         # account for added local position indicator "relative time"
         d_x += 1
 
-        self.x_emb = stf.Time2Vec(d_x, embed_dim=time_emb_dim * d_x)
+        # Time embedding
+        self.x_emb = stf.Time2Vec(d_x, embed_dim=time_emb_dim * d_x//2)
 
         if self.method == "temporal":
             y_emb_inp_dim = d_y + (time_emb_dim * d_x)
@@ -40,8 +64,14 @@ class SpacetimeformerEmbedding(nn.Module):
         if self.method == "spatio-temporal":
             self.var_emb = nn.Embedding(num_embeddings=d_y, embedding_dim=d_model)
 
+        if self.method == "spatio-temporal-event":
+            #self.var_emb = nn.Embedding(num_embeddings=d_y, embedding_dim=d_model)
+            self.typeEvnt_emb   = nn.Embedding(num_embeddings=2, embedding_dim=d_model//2) # sourceType & eventName
+            self.id_emb         = nn.Embedding(num_embeddings=1, embedding_dim=d_model//2) # id
+            self.typeVal_emb    = nn.Linear(2, d_model//2)  # sourceType & value & value idx (0..3)
+
         self.start_token_len = start_token_len
-        self.given_emb = nn.Embedding(num_embeddings=2, embedding_dim=d_model)
+        self.given_emb = nn.Embedding(num_embeddings=2, embedding_dim=d_model//2)
 
         self.downsize_convs = nn.ModuleList(
             [VariableDownsample(d_y, d_model) for _ in range(downsample_convs)]
@@ -57,14 +87,20 @@ class SpacetimeformerEmbedding(nn.Module):
             val_time_emb, space_emb, var_idxs = self.spatio_temporal_embed(
                 y, x, is_encoder
             )
+            event_emb = None
+        elif self.method == "spatio-temporal-event":
+            val_time_emb, space_emb, event_emb, var_idxs = self.spatio_temporal_event_embed(
+                y, x, is_encoder
+            )
         else:
             val_time_emb, space_emb = self.temporal_embed(y, x, is_encoder)
             var_idxs = None
+            event_emb = None
 
-        return val_time_emb, space_emb, var_idxs
+        return val_time_emb, space_emb, event_emb, var_idxs
 
     def temporal_embed(self, y, x, is_encoder=True):
-        bs, length, d_y = y.shape
+        bs, length, d_y = y.shape # batch size, length, dimension of y
 
         local_pos = (
             torch.arange(length).view(1, -1, 1).repeat(bs, 1, 1).to(x.device) / length
@@ -74,6 +110,7 @@ class SpacetimeformerEmbedding(nn.Module):
         x = torch.cat((x, local_pos), dim=-1)
         t2v_emb = self.x_emb(x)
 
+        # 
         emb_inp = torch.cat((y, t2v_emb), dim=-1)
         emb = self.y_emb(emb_inp)
 
@@ -95,9 +132,10 @@ class SpacetimeformerEmbedding(nn.Module):
     TIME = True
     VAL = True
     GIVEN = True
+    EVENT = True
 
     def spatio_temporal_embed(self, y, x, is_encoder=True):
-        bs, length, d_y = y.shape
+        bs, length, d_y = y.shape # batch size, length, dimension of y
 
         # val  + time embedding
         y = torch.cat(y.chunk(d_y, dim=-1), dim=1)
@@ -141,3 +179,86 @@ class SpacetimeformerEmbedding(nn.Module):
         var_emb = self.var_emb(var_idx)
 
         return val_time_emb, var_emb, var_idx_true
+
+    
+    def spatio_temporal_event_embed(self, y, x, is_encoder=True):
+        bs, length, d_y = y.shape # batch size, length, dimension of y
+        #embedded_states = (torch.zeros(y.shape[0],y.shape[1], self.embedded_vocab_dim).to(y.device)).long()
+
+        # time embedding
+        #y = torch.cat(y.chunk(d_y, dim=-1), dim=1)
+        local_pos = (
+            torch.arange(length).view(1, -1, 1).repeat(bs, 1, 1).to(x.device) / length
+        )
+        x = torch.cat((x, local_pos), dim=-1)
+        if not self.TIME:
+            x = torch.zeros_like(x)
+        #if not self.VAL:
+        #    y = torch.zeros_like(y)
+
+        t2v_emb = self.x_emb(x).repeat(1, d_y, 1)
+
+        # value embeddings
+        # splitted = torch.split(y, 1, dim=-1)
+        val_0, val_1, val_2, val_3, sourceType, id = torch.split(y, 1, dim=-1)
+        event = id
+
+        typeEvnt = torch.cat((sourceType, event), -1).to(y.device)
+        _id = id.to(y.device)
+        torch.cat((sourceType, val_0), -1).to(y.device)
+        typeVal_0 = torch.cat((sourceType, val_0), -1).to(y.device)
+        typeVal_1 = torch.cat((sourceType, val_1), -1).to(y.device)
+        typeVal_2 = torch.cat((sourceType, val_2), -1).to(y.device)
+        typeVal_3 = torch.cat((sourceType, val_3), -1).to(y.device)
+
+        typeEvnt_emb    = self.typeEvnt_emb(typeEvnt)
+        id_emb          = self.id_emb(_id)
+        typeVal_0_emb   = self.typeVal_emb(typeVal_0)
+        typeVal_1_emb   = self.typeVal_emb(typeVal_1)
+        typeVal_2_emb   = self.typeVal_emb(typeVal_2)
+        typeVal_3_emb   = self.typeVal_emb(typeVal_3)
+
+        # sum up all embeddings
+        embedding = typeEvnt_emb + id_emb + typeVal_0_emb + typeVal_1_emb + typeVal_2_emb + typeVal_3_emb + t2v_emb
+    
+        # "given" embedding
+        if self.GIVEN:
+            given = torch.ones((bs, length, d_y)).long().to(x.device)  # start as T
+            if not is_encoder:
+                # mask missing values that need prediction...
+                given[:, self.start_token_len :, :] = 0
+            given = torch.cat(given.chunk(d_y, dim=-1), dim=1).squeeze(-1)
+            if self.null_value is not None:
+                # mask null values
+                null_mask = (y != self.null_value).squeeze(-1)
+                given *= null_mask
+            given_emb = self.given_emb(given)
+            embedding += given_emb
+
+        # var embedding - delete
+        var_idx = torch.Tensor([[i for j in range(length)] for i in range(d_y)])
+        var_idx = var_idx.long().to(x.device).view(-1).unsqueeze(0).repeat(bs, 1)
+        var_idx_true = var_idx.clone()
+        if not self.SPACE:
+            var_idx = torch.zeros_like(var_idx)
+        var_emb = self.var_emb(var_idx)
+
+        if is_encoder:
+            for conv in self.downsize_convs:
+                emb = conv(emb)
+                length //= 2
+
+        
+        return embedding, var_emb, var_idx_true
+
+
+    def ohe_states(self, states:str):
+            
+        states = states.split(',')
+        states = [s.strip() for s in states]
+        states = [s for s in states if s != '']
+        states = [s.lower() for s in states]
+        states = [s for s in states if s in self.state_dict]
+        states = [self.state_dict[s] for s in states]
+        states = torch.tensor(states).long().to(self.device)
+        return states

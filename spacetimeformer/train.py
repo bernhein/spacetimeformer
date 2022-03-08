@@ -22,6 +22,7 @@ _DSETS = [
     "toy1",
     "toy2",
     "solar_energy",
+    "decker"
 ]
 
 
@@ -87,29 +88,33 @@ def create_parser():
 def create_model(config):
     x_dim, y_dim = None, None
     if config.dset == "metr-la":
-        x_dim = 2
-        y_dim = 207
+        x_dim = 4
+        y_dim = 209
     elif config.dset == "pems-bay":
-        x_dim = 2
-        y_dim = 325
+        x_dim = 4
+        y_dim = 327
     elif config.dset == "precip":
-        x_dim = 2
-        y_dim = 49
+        x_dim = 4
+        y_dim = 51
     elif config.dset == "asos":
-        x_dim = 6
-        y_dim = 6
-    elif config.dset == "solar_energy":
-        x_dim = 6
-        y_dim = 137
-    elif config.dset == "exchange":
-        x_dim = 6
+        x_dim = 8
         y_dim = 8
+    elif config.dset == "solar_energy":
+        x_dim = 8
+        y_dim = 139
+    elif config.dset == "exchange":
+        x_dim = 8
+        y_dim = 10
     elif config.dset == "toy1":
-        x_dim = 6
-        y_dim = 20
+        x_dim = 8
+        y_dim = 22
     elif config.dset == "toy2":
-        x_dim = 6
-        y_dim = 20
+        x_dim = 8
+        y_dim = 22
+    #@todo: configure dataset decker
+    elif config.dset == "decker":
+        x_dim = 8
+        y_dim = 22
 
     assert x_dim is not None
     assert y_dim is not None
@@ -173,6 +178,7 @@ def create_model(config):
         )
     elif config.model == "spacetimeformer":
         forecaster = stf.spacetimeformer_model.Spacetimeformer_Forecaster(
+            #state_vocabulary=['Start','Fault','TargetChange','VeloChange','ERR','Start','Halt','Reset','TargetVeloReached','Start','RelBrake','Reset','CW','Error','nTargetVelo','nActVelo','nErrorCode'],
             d_y=y_dim,
             d_x=x_dim,
             start_token_len=config.start_token_len,
@@ -256,28 +262,42 @@ def create_dset(config):
             workers=config.workers,
         )
         NULL_VAL = -1.0
+
+    elif config.dset == "decker":
+        dset = stf.data.precip.GeoDset(dset_dir=config.dset_dir, var="precip")
+        DATA_MODULE = stf.data.DataModule(
+            datasetCls=stf.data.precip.CONUS_Precip,
+            dataset_kwargs={
+                "dset": dset,
+                "context_points": config.context_points,
+                "target_points": config.target_points,
+            },
+            batch_size=config.batch_size,
+            workers=config.workers,
+        )
+        NULL_VAL = -1.0
     else:
         data_path = config.data_path
         if config.dset == "asos":
             if data_path == "auto":
-                data_path = "./data/temperature-v1.csv"
+                data_path = "./spacetimeformer/spacetimeformer/data/temperature-v1.csv"
             target_cols = ["ABI", "AMA", "ACT", "ALB", "JFK", "LGA"]
         elif config.dset == "solar_energy":
             if data_path == "auto":
-                data_path = "./data/solar_AL_converted.csv"
+                data_path = "./spacetimeformer/spacetimeformer/data/solar_AL_converted.csv"
             target_cols = [str(i) for i in range(137)]
         elif "toy" in config.dset:
             if data_path == "auto":
                 if config.dset == "toy1":
-                    data_path = "./data/toy_dset1.csv"
+                    data_path = "./spacetimeformer/spacetimeformer/data/toy_dset1.csv"
                 elif config.dset == "toy2":
-                    data_path = "./data/toy_dset2.csv"
+                    data_path = "./spacetimeformer/spacetimeformer/data/toy_dset2.csv"
                 else:
                     raise ValueError(f"Unrecognized toy dataset {config.dset}")
             target_cols = [f"D{i}" for i in range(1, 21)]
         elif config.dset == "exchange":
             if data_path == "auto":
-                data_path = "./data/exchange_rate_converted.csv"
+                data_path = "./spacetimeformer/spacetimeformer/data/exchange_rate_converted.csv"
             target_cols = [
                 "Australia",
                 "United Kingdom",
@@ -312,7 +332,7 @@ def create_dset(config):
 
 def create_callbacks(config):
     saving = pl.callbacks.ModelCheckpoint(
-        dirpath=f"./data/stf_model_checkpoints/{config.run_name}_{''.join([str(random.randint(0,9)) for _ in range(9)])}",
+        dirpath=f"./spacetimeformer/spacetimeformer/data/stf_model_checkpoints/{config.run_name}_{''.join([str(random.randint(0,9)) for _ in range(9)])}",
         monitor="val/mse",
         mode="min",
         filename=f"{config.run_name}" + "{epoch:02d}-{val/mse:.2f}",
@@ -356,6 +376,12 @@ def main(args):
         project = os.getenv("STF_WANDB_PROJ")
         entity = os.getenv("STF_WANDB_ACCT")
         log_dir = os.getenv("STF_LOG_DIR")
+
+        if project is None:
+            project = "MasterThesis"
+        if entity is None:
+            entity = "bern-hein"
+
         if log_dir is None:
             log_dir = "./data/STF_LOG_DIR"
             print(
@@ -378,7 +404,7 @@ def main(args):
         wandb.run.name = args.run_name
         wandb.run.save()
         logger = pl.loggers.WandbLogger(
-            experiment=experiment, save_dir="./data/stf_LOG_DIR"
+            experiment=experiment, save_dir="./spacetimeformer/spacetimeformer/data/stf_LOG_DIR"
         )
         logger.log_hyperparams(config)
 

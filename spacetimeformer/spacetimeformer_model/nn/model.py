@@ -26,36 +26,36 @@ warnings.filterwarnings("ignore", category=UserWarning)
 class Spacetimeformer(nn.Module):
     def __init__(
         self,
-        d_y: int = 1,
-        d_x: int = 4,
-        start_token_len: int = 64,
-        attn_factor: int = 5,
-        d_model: int = 512,
-        n_heads: int = 8,
-        e_layers: int = 2,
-        d_layers: int = 2,
-        d_ff: int = 512,
-        time_emb_dim: int = 6,
-        dropout_emb: float = 0.05,
-        dropout_token: float = 0.05,
-        dropout_attn_out: float = 0.05,
-        dropout_ff: float = 0.05,
-        dropout_qkv: float = 0.05,
-        global_self_attn: str = "performer",
-        local_self_attn: str = "none",
-        global_cross_attn: str = "performer",
-        local_cross_attn: str = "none",
-        performer_attn_kernel: str = "relu",
-        performer_redraw_interval: int = 250,
-        embed_method: str = "spatio-temporal",
-        activation: str = "gelu",
-        post_norm: bool = True,
-        norm: str = "layer",
-        initial_downsample_convs: int = 0,
-        intermediate_downsample_convs: int = 0,
-        device=torch.device("cuda:0"),
-        null_value: float = None,
-        verbose: bool = True,
+        d_y: int = 1,                           # dimension of the output
+        d_x: int = 4,                           # dimension of the input
+        start_token_len: int = 64,              # length of the start token
+        attn_factor: int = 5,                   # factor for the attention
+        d_model: int = 512,                     # dimension of the model
+        n_heads: int = 8,                       # number of heads
+        e_layers: int = 2,                      # encoder layers?
+        d_layers: int = 2,                      # decoder layers?
+        d_ff: int = 512,                        # feedforward layer size?
+        time_emb_dim: int = 6,                  # dimension of the time embedding
+        dropout_emb: float = 0.05,              # dropout for the embedding
+        dropout_token: float = 0.05,            # dropout for the token
+        dropout_attn_out: float = 0.05,         # dropout for the attention output
+        dropout_ff: float = 0.05,               # dropout for the feedforward
+        dropout_qkv: float = 0.05,              # dropout for the qkv
+        global_self_attn: str = "performer",    # global attention type
+        local_self_attn: str = "none",          # local attention type
+        global_cross_attn: str = "performer",   # global attention type
+        local_cross_attn: str = "none",         # local attention type
+        performer_attn_kernel: str = "relu",    # kernel for the performer attention
+        performer_redraw_interval: int = 250,   # redraw interval for the performer attention
+        embed_method: str = "spatio-temporal",  # embedding method
+        activation: str = "gelu",               # activation function
+        post_norm: bool = True,                 # whether to apply post normalization
+        norm: str = "layer",                    # normalization type
+        initial_downsample_convs: int = 0,      # initial downsampling convs
+        intermediate_downsample_convs: int = 0, # intermediate downsampling convs
+        device=torch.device("cuda:0"),          # device
+        null_value: float = None,               # null value
+        verbose: bool = True,                   # verbose
     ):
         super().__init__()
         if e_layers:
@@ -180,8 +180,8 @@ class Spacetimeformer(nn.Module):
 
     def forward(
         self,
-        x_enc,
-        x_mark_enc,
+        x_enc,      # x encoding        (y encoder)
+        x_mark_enc, # x_mark encoding   (x encoder)
         x_dec,
         x_mark_dec,
         enc_self_mask=None,
@@ -192,7 +192,7 @@ class Spacetimeformer(nn.Module):
         batch_size = x_enc.shape[0]
 
         enc_vt_emb, enc_s_emb, enc_var_idx = self.embedding(
-            x_enc, x_mark_enc, is_encoder=True
+            x_enc, x_mark_enc, is_encoder=True  # 
         )
         enc_out, attns = self.encoder(
             val_time_emb=enc_vt_emb,
