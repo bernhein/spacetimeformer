@@ -171,8 +171,8 @@ class Forecaster(pl.LightningModule, ABC):
         return (output,)
 
     def _compute_stats(self, pred: torch.Tensor, true: torch.Tensor):
-        pred = self._inv_scaler(pred.detach().cpu().numpy())
-        true = self._inv_scaler(true.detach().cpu().numpy())
+        pred = self._inv_scaler(pred.detach())
+        true = self._inv_scaler(true.detach()) # .cpu().numpy()
         return {
             "mape": stf.eval_stats.mape(true, pred),
             "mae": stf.eval_stats.mae(true, pred),
@@ -191,7 +191,7 @@ class Forecaster(pl.LightningModule, ABC):
             time_mask=time_mask,
             forward_kwargs=kwargs,
         )
-        *_, y_t = batch
+        x_c, y_c, x_t, y_t = batch
         stats = self._compute_stats(mask * output, mask * y_t)
         stats["loss"] = loss
         return stats

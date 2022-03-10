@@ -35,7 +35,7 @@ class Spacetimeformer(nn.Module):
         e_layers: int = 2,                      # encoder layers?
         d_layers: int = 2,                      # decoder layers?
         d_ff: int = 512,                        # feedforward layer size?
-        time_emb_dim: int = 6,                  # dimension of the time embedding
+        time_emb_dim: int = 7,                  # dimension of the time embedding
         dropout_emb: float = 0.05,              # dropout for the embedding
         dropout_token: float = 0.05,            # dropout for the token
         dropout_attn_out: float = 0.05,         # dropout for the attention output
@@ -160,23 +160,29 @@ class Spacetimeformer(nn.Module):
         qprint(f"Val Embedding: {self.embedding.VAL}")
         qprint(f"Given Embedding: {self.embedding.GIVEN}")
 
-        out_dim = 2 if self.embed_method == "spatio-temporal" else 2 * d_y
+        out_dim = 2 * d_y
+        if self.embed_method == "spatio-temporal":
+            out_dim = 2
+        elif self.embed_method == "spatio-temporal-event":
+            out_dim = d_y
+        # out_dim = 2 if self.embed_method in ["spatio-temporal", "spatio-temporal-event"] else 2 * d_y
+
         self.forecaster = nn.Linear(d_model, out_dim, bias=True)
-        self.classifier = nn.Linear(d_model, d_y, bias=True)
+        # self.classifier = nn.Linear(d_model, d_y, bias=True)
 
         self.d_y = d_y
 
-    def _fold_spatio_temporal(self, dec_out):
-        dec_out = dec_out.chunk(self.d_y, dim=1)
-        means = []
-        log_stds = []
-        for y in dec_out:
-            mean, log_std = y.chunk(2, dim=-1)
-            means.append(mean)
-            log_stds.append(log_std)
-        means = torch.cat(means, dim=-1)[:, self.start_token_len :, :]
-        log_stds = torch.cat(log_stds, dim=-1)[:, self.start_token_len :, :]
-        return means, log_stds
+    # def _fold_spatio_temporal(self, dec_out):
+    #     dec_out = dec_out.chunk(self.d_y, dim=1)
+    #     means = []
+    #     log_stds = []
+    #     for y in dec_out:
+    #         mean, log_std = y.chunk(2, dim=-1)
+    #         means.append(mean)
+    #         log_stds.append(log_std)
+    #     means = torch.cat(means, dim=-1)[:, self.start_token_len :, :]
+    #     log_stds = torch.cat(log_stds, dim=-1)[:, self.start_token_len :, :]
+    #     return means, log_stds
 
     def forward(
         self,
@@ -191,18 +197,22 @@ class Spacetimeformer(nn.Module):
     ):
         batch_size = x_enc.shape[0]
 
+        # Encoder Embedding
         enc_vt_emb, enc_s_emb, enc_var_idx = self.embedding(
             x_enc, x_mark_enc, is_encoder=True  # 
         )
+        # Encoder
         enc_out, attns = self.encoder(
             val_time_emb=enc_vt_emb,
             space_emb=enc_s_emb,
             attn_mask=enc_self_mask,
             output_attn=output_attention,
         )
+        # Decoder Embedding
         dec_vt_emb, dec_s_emb, dec_var_idx = self.embedding(
             x_dec, x_mark_dec, is_encoder=False
         )
+        # Decoder
         dec_out = self.decoder(
             val_time_emb=dec_vt_emb,
             space_emb=dec_s_emb,
@@ -213,11 +223,21 @@ class Spacetimeformer(nn.Module):
 
         forecast_out = self.forecaster(dec_out)
 
-        if self.embed_method == "spatio-temporal":
+        if self.embed_method in ["spatio-temporal"]:
             means, log_stds = self._fold_spatio_temporal(forecast_out)
+        elif self.embed_method in ["spatio-temporal-event"]:
+            val_0, val_1, val_2, val_3, sourceType, id, event = torch.split(forecast_out, 1, dim=-1)
+            vals = [val_0, val_1, val_2, val_3]
+            means = 0
+            log_stds = 0
+            for v in vals:
+                means += torch.mean(v, dim=1)
+                log_stds += torch.std(v, dim=1)
+            means = means / len(vals)
+            log_stds = log_stds / len(vals)
         else:
             forecast_out = forecast_out[:, self.start_token_len :, :]
-            means, log_stds = forecast_out.chunk(2, dim=-1)
+            means, log_stds = forecast_out.chunk(2, dim=-1) 
 
         # stabilization trick from Neural Processes papers
         stds = 1e-3 + (1.0 - 1e-3) * torch.log(1.0 + log_stds.exp())
@@ -233,10 +253,16 @@ class Spacetimeformer(nn.Module):
             classifier_enc_out = self.classifier(enc_out.detach())
             classifier_out = torch.cat((classifier_enc_out, classifier_dec_out), dim=1)
             var_idxs = torch.cat((enc_var_idx, dec_var_idx), dim=1)
+        # elif self.embed_method == "spatio-temporal-event":
+        #     classifier_dec_out = self.classifier(dec_out.detach())
+        #     classifier_enc_out = self.classifier(enc_out.detach())
+        #     classifier_out = torch.cat((classifier_enc_out, classifier_dec_out), dim=1)
+        #     var_idxs = None
         else:
             classifier_out, var_idxs = None, None
 
-        return pred_distrib, (classifier_out, var_idxs), attns
+        # return pred_distrib, (classifier_out, var_idxs), attns
+        return forecast_out, (classifier_out, var_idxs), attns
 
     def _global_attn_switch(
         self,

@@ -31,7 +31,7 @@ class Spacetimeformer_Forecaster(stf.Forecaster):
         global_cross_attn: str = "performer",
         local_cross_attn: str = "none",
         performer_kernel: str = "relu",
-        embed_method: str = "spatio-temporal",
+        embed_method: str = "spatio-temporal-event",
         performer_relu: bool = True,
         performer_redraw_interval: int = 1000,
         activation: str = "gelu",
@@ -130,12 +130,12 @@ class Spacetimeformer_Forecaster(stf.Forecaster):
             forward_kwargs=kwargs,
         )
 
-        *_, y_t = batch
+        x_c, y_c, x_t, y_t = batch
         stats = self._compute_stats(mask * output, mask * y_t)
         stats["forecast_loss"] = forecast_loss
-        stats["class_loss"] = class_loss
-        stats["loss"] = forecast_loss + self.class_loss_imp * class_loss
-        stats["acc"] = acc
+        # stats["class_loss"] = class_loss
+        stats["loss"] = forecast_loss # + self.class_loss_imp * class_loss
+        # stats["acc"] = acc
 
         """
         # temporary traffic stats:
@@ -148,23 +148,42 @@ class Spacetimeformer_Forecaster(stf.Forecaster):
         """
         return stats
 
-    def classification_loss(
-        self, logits: torch.Tensor, labels: torch.Tensor
-    ) -> Tuple[torch.Tensor]:
+    # def classification_loss(
+    #     self, logits: torch.Tensor, labels: torch.Tensor
+    # ) -> Tuple[torch.Tensor]:
 
-        labels = labels.view(-1).to(logits.device)
-        d_y = labels.max() + 1
+    #     labels = labels.view(-1).to(logits.device)
+    #     d_y = labels.max() + 1
 
-        logits = logits.view(
-            -1, d_y
-        )  #  = torch.cat(logits.chunk(bs, dim=0), dim=1).squeeze(0)
+    #     logits = logits.view(
+    #         -1, d_y
+    #     )  #  = torch.cat(logits.chunk(bs, dim=0), dim=1).squeeze(0)
 
-        class_loss = F.cross_entropy(logits, labels)
-        acc = torchmetrics.functional.accuracy(
-            torch.softmax(logits, dim=1),
-            labels,
-        )
-        return class_loss, acc
+    #     class_loss = F.cross_entropy(logits, labels)
+    #     acc = torchmetrics.functional.accuracy(
+    #         torch.softmax(logits, dim=1),
+    #         labels,
+    #     )
+    #     return class_loss, acc
+
+
+    # def classification_loss_event(
+    #     self, logits: torch.Tensor, labels: torch.Tensor
+    # ) -> Tuple[torch.Tensor]:
+
+    #     labels = labels.view(-1).to(logits.device)
+    #     d_y = labels.max() + 1
+
+    #     logits = logits.view(
+    #         -1, d_y
+    #     )  #  = torch.cat(logits.chunk(bs, dim=0), dim=1).squeeze(0)
+
+    #     class_loss = F.cross_entropy(logits, labels)
+    #     acc = torchmetrics.functional.accuracy(
+    #         torch.softmax(logits, dim=1),
+    #         labels,
+    #     )
+    #     return class_loss, acc
 
     def compute_loss(self, batch, time_mask=None, forward_kwargs={}):
         x_c, y_c, x_t, y_t = batch
@@ -174,12 +193,16 @@ class Spacetimeformer_Forecaster(stf.Forecaster):
             outputs=outputs, y_t=y_t, time_mask=time_mask
         )
 
-        if self.embed_method == "spatio-temporal" and self.class_loss_imp > 0:
-            class_loss, acc = self.classification_loss(logits=logits, labels=labels)
-        else:
-            class_loss, acc = 0.0, -1.0
+        # if self.embed_method == "spatio-temporal" and self.class_loss_imp > 0:
+        #     class_loss, acc = self.classification_loss(logits=logits, labels=labels)
+        # elif self.embed_method == "spatio-temporal-event" and self.class_loss_imp > 0:
+        #     class_loss, acc = self.classification_loss_event(logits=logits, labels=labels)
+        # else:
+        #     class_loss, acc = 0.0, -1.0
+        class_loss = None
+        acc = None
 
-        return forecast_loss, class_loss, acc, outputs.mean, mask
+        return forecast_loss, class_loss, acc, outputs, mask
 
     def forward_model_pass(self, x_c, y_c, x_t, y_t, output_attn=False):
         if len(y_c.shape) == 2:
@@ -187,17 +210,13 @@ class Spacetimeformer_Forecaster(stf.Forecaster):
             y_t = y_t.unsqueeze(-1)
         batch_x = y_c
         batch_x_mark = x_c
-
-        if self.start_token_len > 0:
-            batch_y = torch.cat((y_c[:, -self.start_token_len :, :], y_t), dim=1)
-            batch_y_mark = torch.cat((x_c[:, -self.start_token_len :, :], x_t), dim=1)
-        else:
-            batch_y = y_t
-            batch_y_mark = x_t
+        
+        batch_y = y_t
+        batch_y_mark = x_t
 
         dec_inp = torch.cat(
             [
-                batch_y[:, : self.start_token_len, :],
+                # batch_y[:, : self.start_token_len, :],
                 torch.zeros((batch_y.shape[0], y_t.shape[1], batch_y.shape[-1])).to(
                     self.device
                 ),
@@ -430,7 +449,7 @@ class Spacetimeformer_Forecaster(stf.Forecaster):
         parser.add_argument(
             "--embed_method",
             type=str,
-            choices=["spatio-temporal", "temporal"],
+            choices=["spatio-temporal", "temporal", "spatio-temporal-event"],
             default="spatio-temporal",
             help="Embedding method. spatio-temporal enables long-sequence spatio-temporal transformer mode while temporal recovers default architecture.",
         )

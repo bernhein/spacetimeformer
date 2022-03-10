@@ -16,5 +16,5 @@ def time_features(dates, main_df=None):
     main_df["Weekday"] = dates.apply(lambda row: 2.0 * (row.weekday() / 6.0) - 1.0, 1)
     main_df["Hour"] = dates.apply(lambda row: 2.0 * ((row.hour) / 23.0) - 1.0, 1)
     main_df["Minute"] = dates.apply(lambda row: 2.0 * ((row.minute) / 59.0) - 1.0, 1)
-    main_df["Datetime"] = dates
+    main_df["timestamp"] = dates
     return main_df

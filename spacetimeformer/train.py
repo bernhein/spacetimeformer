@@ -113,8 +113,8 @@ def create_model(config):
         y_dim = 22
     #@todo: configure dataset decker
     elif config.dset == "decker":
-        x_dim = 8
-        y_dim = 22
+        x_dim = 7
+        y_dim = 7
 
     assert x_dim is not None
     assert y_dim is not None
@@ -264,18 +264,36 @@ def create_dset(config):
         NULL_VAL = -1.0
 
     elif config.dset == "decker":
-        dset = stf.data.precip.GeoDset(dset_dir=config.dset_dir, var="precip")
+        
+        #data_path = config.data_path
+        data_path = "/home/hein/MasterThesis/MasterThesis/ML/boilerplate/tf2/2022.02.10.csv"
+        target_cols = [
+                "val_0",
+                "val_1",
+                "val_2",
+                "val_3",
+                "sourceType",
+                "ID",
+                "Event",
+            ]
+        dset = stf.data.CSVTimeSeries(
+            data_path=data_path,
+            target_cols=target_cols,
+        )
         DATA_MODULE = stf.data.DataModule(
-            datasetCls=stf.data.precip.CONUS_Precip,
+            datasetCls=stf.data.CSVTorchDset,
             dataset_kwargs={
-                "dset": dset,
+                "csv_time_series": dset,
                 "context_points": config.context_points,
                 "target_points": config.target_points,
+                "time_resolution": config.time_resolution,
             },
             batch_size=config.batch_size,
             workers=config.workers,
         )
-        NULL_VAL = -1.0
+        INV_SCALER = dset.reverse_scaling
+        SCALER = dset.apply_scaling
+        NULL_VAL = None
     else:
         data_path = config.data_path
         if config.dset == "asos":

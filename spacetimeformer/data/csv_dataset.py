@@ -25,28 +25,29 @@ class CSVTimeSeries:
         self.data_path = data_path
         assert os.path.exists(self.data_path)
 
-        # read the file and do some datetime conversions
+        # read the file and do some timestamp conversions
         raw_df = pd.read_csv(
             self.data_path,
             **read_csv_kwargs,
         )
-
-        time_df = pd.to_datetime(raw_df["Datetime"], format="%Y-%m-%d %H:%M")
+        # format="%Y-%m-%d %H:%M"
+        # 
+        time_df = pd.to_datetime(raw_df["timestamp"], format='%Y-%m-%d %H:%M:%S.%f')
         df = stf.data.timefeatures.time_features(time_df, raw_df)
 
-        assert (df["Datetime"] > pd.Timestamp.min).all()
-        assert (df["Datetime"] < pd.Timestamp.max).all()
+        assert (df["timestamp"] > pd.Timestamp.min).all()
+        assert (df["timestamp"] < pd.Timestamp.max).all()
 
         # Train/Val/Test Split using holdout approach #
 
         def mask_intervals(mask, intervals, cond):
             for (interval_low, interval_high) in intervals:
                 if interval_low is None:
-                    interval_low = df["Datetime"].iloc[0].year
+                    interval_low = df["timestamp"].iloc[0].year
                 if interval_high is None:
-                    interval_high = df["Datetime"].iloc[-1].year
+                    interval_high = df["timestamp"].iloc[-1].year
                 mask[
-                    (df["Datetime"] >= interval_low) & (df["Datetime"] <= interval_high)
+                    (df["timestamp"] >= interval_low) & (df["timestamp"] <= interval_high)
                 ] = cond
             return mask
 
@@ -61,9 +62,9 @@ class CSVTimeSeries:
         test_interval_high = time_df.iloc[-1]
         test_intervals = [(test_interval_low, test_interval_high)]
 
-        train_mask = df["Datetime"] > pd.Timestamp.min
-        val_mask = df["Datetime"] > pd.Timestamp.max
-        test_mask = df["Datetime"] > pd.Timestamp.max
+        train_mask = df["timestamp"] > pd.Timestamp.min
+        val_mask = df["timestamp"] > pd.Timestamp.max
+        test_mask = df["timestamp"] > pd.Timestamp.max
         train_mask = mask_intervals(train_mask, test_intervals, False)
         train_mask = mask_intervals(train_mask, val_intervals, False)
         val_mask = mask_intervals(val_mask, val_intervals, True)
@@ -72,11 +73,23 @@ class CSVTimeSeries:
         if (train_mask == False).all():
             print(f"No training data detected for file {data_path}")
 
+        self.scale_feats = ['val_0', 'val_1', 'val_2', 'val_3']
+
         self._train_data = df[train_mask]
-        self._scaler = StandardScaler()
+        self._scaler_0 = StandardScaler()
+        self._scaler_1 = StandardScaler()
+        self._scaler_2 = StandardScaler()
+        self._scaler_3 = StandardScaler()
+        # self._scaler = StandardScaler()
         self.target_cols = target_cols
 
-        self._scaler = self._scaler.fit(self._train_data[target_cols].values)
+        # self._scaler = self._scaler.fit(self._train_data[target_cols].values)
+        #self._scaler = self._scaler.fit(self._train_data[self.scale_feats].values)
+
+        self._scaler_0 = self._scaler_0.fit(self._train_data['val_0'].values.reshape(-1, 1))
+        self._scaler_1 = self._scaler_1.fit(self._train_data['val_1'].values.reshape(-1, 1))
+        self._scaler_2 = self._scaler_2.fit(self._train_data['val_2'].values.reshape(-1, 1))
+        self._scaler_3 = self._scaler_3.fit(self._train_data['val_3'].values.reshape(-1, 1))
 
         self._train_data = self.apply_scaling_df(df[train_mask])
         self._val_data = self.apply_scaling_df(df[val_mask])
@@ -93,23 +106,78 @@ class CSVTimeSeries:
 
     def apply_scaling_df(self, df):
         scaled = df.copy(deep=True)
-        scaled[self.target_cols] = (
-            df[self.target_cols].values - self._scaler.mean_
-        ) / self._scaler.scale_
+
+        # scaled[self.target_cols] = (
+        #     df[self.target_cols].values - self._scaler.mean_
+        # ) / self._scaler.scale_
+
+        # scaled[self.scale_feats] = (
+        #     df[self.scale_feats].values - self._scaler.mean_
+        # ) / self._scaler.scale_
+
+
+        scaled['val_0'] = (
+            df['val_0'].values - self._scaler_0.mean_
+        ) / self._scaler_0.scale_
+        
+        scaled['val_1'] = (
+            df['val_1'].values - self._scaler_1.mean_
+        ) / self._scaler_1.scale_
+
+        scaled['val_2'] = (
+            df['val_2'].values - self._scaler_2.mean_
+        ) / self._scaler_2.scale_
+
+        scaled['val_3'] = (
+            df['val_3'].values - self._scaler_3.mean_
+        ) / self._scaler_3.scale_
+
         return scaled
 
     def apply_scaling(self, array):
-        return (array - self._scaler.mean_) / self._scaler.scale_
+         return (array - self._scaler.mean_) / self._scaler.scale_
 
     def reverse_scaling_df(self, df):
         scaled = df.copy(deep=True)
-        scaled[self.target_cols] = (
-            df[self.target_cols] * self._scaler.scale_
-        ) + self._scaler.mean_
+        # scaled[self.target_cols] = (
+        #     df[self.target_cols] * self._scaler.scale_
+        # ) + self._scaler.mean_
+
+
+        # scaled[self.scale_feats] = (
+        #     df[self.scale_feats] * self._scaler.scale_
+        # ) + self._scaler.mean_
+
+        scaled['val_0'] = (
+            df['val_0'] * self._scaler_0.scale_
+        ) + self._scaler_0.mean_
+
+        scaled['val_1'] = (
+            df['val_1'] * self._scaler_1.scale_
+        ) + self._scaler_1.mean_
+
+        scaled['val_2'] = (
+            df['val_2'] * self._scaler_2.scale_
+        ) + self._scaler_2.mean_
+
+        scaled['val_3'] = (
+            df['val_3'] * self._scaler_3.scale_
+        ) + self._scaler_3.mean_
+
         return scaled
 
     def reverse_scaling(self, array):
-        return (array * self._scaler.scale_) + self._scaler.mean_
+        val_0, val_1, val_2, val_3, sourceType, id, event = torch.split(array, 1, dim=-1) #.cpu().numpy()
+
+        val_0 = (val_0.cpu().numpy() * self._scaler_0.scale_) + self._scaler_0.mean_
+        val_1 = (val_1.cpu().numpy() * self._scaler_1.scale_) + self._scaler_1.mean_
+        val_2 = (val_2.cpu().numpy() * self._scaler_2.scale_) + self._scaler_2.mean_
+        val_3 = (val_3.cpu().numpy() * self._scaler_3.scale_) + self._scaler_3.mean_
+
+        # return (array * self._scaler.scale_) + self._scaler.mean_
+        c = np.concatenate([val_0, val_1, val_2, val_3, sourceType.cpu().numpy(), id.cpu().numpy(), event.cpu().numpy()], axis=-1)
+        return c
+        # return torch.cat((val_0, val_1, val_2, val_3, sourceType, id, event), dim=-1).numpy()
 
     @property
     def train_data(self):
@@ -180,7 +248,7 @@ class CSVTorchDset(Dataset):
             stop=start
             + self.time_resolution * (self.context_points + self.target_points),
             skip=self.time_resolution,
-        ).drop(columns=["Datetime"])
+        ).drop(columns=["timestamp"])
         ctxt_slice, trgt_slice = (
             series_slice.iloc[: self.context_points],
             series_slice.iloc[self.context_points :],
