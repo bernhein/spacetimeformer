@@ -23,20 +23,31 @@ class CSVTimeSeries:
         test_split: float = 0.15,
     ):
         self.data_path = data_path
-        assert os.path.exists(self.data_path)
 
+
+        df = None
         # read the file and do some timestamp conversions
-        raw_df = pd.read_csv(
-            self.data_path,
-            **read_csv_kwargs,
-        )
-        # format="%Y-%m-%d %H:%M"
-        # 
-        time_df = pd.to_datetime(raw_df["timestamp"], format='%Y-%m-%d %H:%M:%S.%f')
-        df = stf.data.timefeatures.time_features(time_df, raw_df)
+        for i in range(1, 4):
+            assert os.path.exists(f'{self.data_path}-{i}.csv')
+            raw_df = pd.read_csv(
+                f'{self.data_path}-{i}.csv', 
+                delimiter=",",
+                **read_csv_kwargs,
+            )
+            # format="%Y-%m-%d %H:%M"
+            # 
+            time_df = pd.to_datetime(raw_df["timestamp"], format='%Y-%m-%d %H:%M:%S.%f')
+            
+            time_feat_df = stf.data.timefeatures.time_features(time_df, raw_df)
+            if df is None:
+                df = time_feat_df.copy(deep=True)
+                # df = pd.DataFrame(time_feat_df, columns=["timestamp"])
+            else:
+                df = pd.concat([df, time_feat_df])
 
-        assert (df["timestamp"] > pd.Timestamp.min).all()
-        assert (df["timestamp"] < pd.Timestamp.max).all()
+            assert (df["timestamp"] > pd.Timestamp.min.tz_localize('utc')).all()
+            assert (df["timestamp"] < pd.Timestamp.max.tz_localize('utc')).all()
+
 
         # Train/Val/Test Split using holdout approach #
 
@@ -62,9 +73,9 @@ class CSVTimeSeries:
         test_interval_high = time_df.iloc[-1]
         test_intervals = [(test_interval_low, test_interval_high)]
 
-        train_mask = df["timestamp"] > pd.Timestamp.min
-        val_mask = df["timestamp"] > pd.Timestamp.max
-        test_mask = df["timestamp"] > pd.Timestamp.max
+        train_mask = df["timestamp"] > pd.Timestamp.min.tz_localize('utc')
+        val_mask = df["timestamp"] > pd.Timestamp.max.tz_localize('utc')
+        test_mask = df["timestamp"] > pd.Timestamp.max.tz_localize('utc')
         train_mask = mask_intervals(train_mask, test_intervals, False)
         train_mask = mask_intervals(train_mask, val_intervals, False)
         val_mask = mask_intervals(val_mask, val_intervals, True)
@@ -253,6 +264,9 @@ class CSVTorchDset(Dataset):
             series_slice.iloc[: self.context_points],
             series_slice.iloc[self.context_points :],
         )
+
+        # "sourceType",
+        # "ID",
         ctxt_x = ctxt_slice[
             ctxt_slice.columns.difference(self.series.target_cols)
         ].values

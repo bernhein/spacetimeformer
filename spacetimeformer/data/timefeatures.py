@@ -13,8 +13,9 @@ def time_features(dates, main_df=None):
 
     main_df["Month"] = dates.apply(lambda row: 2.0 * ((row.month - 1) / 11.0) - 1.0, 1)
     main_df["Day"] = dates.apply(lambda row: 2.0 * ((row.day - 1) / 30.0) - 1.0, 1)
-    main_df["Weekday"] = dates.apply(lambda row: 2.0 * (row.weekday() / 6.0) - 1.0, 1)
+    main_df["Weekday"] = dates.apply(lambda row: 2.0 * (row.day_of_week / 6.0) - 1.0, 1)
     main_df["Hour"] = dates.apply(lambda row: 2.0 * ((row.hour) / 23.0) - 1.0, 1)
     main_df["Minute"] = dates.apply(lambda row: 2.0 * ((row.minute) / 59.0) - 1.0, 1)
+    main_df["Microsecond"] = dates.apply(lambda row: 2.0 * ((row.microsecond) / 999999.0) - 1.0, 1)
     main_df["timestamp"] = dates
     return main_df

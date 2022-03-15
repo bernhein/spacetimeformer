@@ -69,6 +69,10 @@ class SpacetimeformerEmbedding(nn.Module):
             self.typeEvnt_emb   = nn.Embedding(num_embeddings=26, embedding_dim=d_model) # sourceType & eventName
             self.id_emb         = nn.Embedding(num_embeddings=23, embedding_dim=d_model) # id
             self.typeVal_emb    = nn.Linear(2, d_model)  # sourceType & value & value idx (0..3)
+            self.typeVal_0_emb    = nn.Linear(2, d_model)  # sourceType & value & value idx (0..3)
+            self.typeVal_1_emb    = nn.Linear(2, d_model)  # sourceType & value & value idx (0..3)
+            self.typeVal_2_emb    = nn.Linear(2, d_model)  # sourceType & value & value idx (0..3)
+            self.typeVal_3_emb    = nn.Linear(2, d_model)  # sourceType & value & value idx (0..3)
 
         self.start_token_len = start_token_len
         self.given_emb = nn.Embedding(num_embeddings=2, embedding_dim=d_model)
@@ -182,67 +186,48 @@ class SpacetimeformerEmbedding(nn.Module):
     
     def spatio_temporal_event_embed(self, y, x, is_encoder=True):
         bs, length, d_y = y.shape # batch size, length, dimension of y
-        #embedded_states = (torch.zeros(y.shape[0],y.shape[1], self.embedded_vocab_dim).to(y.device)).long()
 
-        # if not is_encoder:
-        #     print("decoder")
-        # time embedding
-        #y = torch.cat(y.chunk(d_y, dim=-1), dim=1)
         local_pos = (
             torch.arange(length).view(1, -1, 1).repeat(bs, 1, 1).to(x.device) / length
         )
         x = torch.cat((x, local_pos), dim=-1)
         if not self.TIME:
             x = torch.zeros_like(x)
-        #if not self.VAL:
-        #    y = torch.zeros_like(y)
-
-        #t2v_emb = self.x_emb(x).repeat(1, d_y, 1)
+            
         t2v_emb = self.x_emb(x)
         # value embeddings
         # splitted = torch.split(y, 1, dim=-1)
-        val_0, val_1, val_2, val_3, sourceType, id, event = torch.split(y, 1, dim=-1)
-        #event = id
+        val_0, val_1, val_2, val_3, sourceType, id, event = torch.split(y, 1, dim=-1) 
 
-        typeEvnt = torch.cat((sourceType, event), -1).int()
-        _id = torch.from_numpy(id.to(torch.int64).cpu().numpy()).to(y.device)
-        #torch.cat((sourceType, val_0), -1).to(y.device)
-        typeVal_0 = torch.cat((sourceType, val_0), -1).to(y.device)
-        typeVal_1 = torch.cat((sourceType, val_1), -1).to(y.device)
-        typeVal_2 = torch.cat((sourceType, val_2), -1).to(y.device)
-        typeVal_3 = torch.cat((sourceType, val_3), -1).to(y.device)
-
-        typeEvnt_emb    = torch.sum(self.typeEvnt_emb(typeEvnt), -2)
-        id_emb          = torch.sum(self.id_emb(_id), -2)
-        typeVal_0_emb   = self.typeVal_emb(typeVal_0)
-        typeVal_1_emb   = self.typeVal_emb(typeVal_1)
-        typeVal_2_emb   = self.typeVal_emb(typeVal_2)
-        typeVal_3_emb   = self.typeVal_emb(typeVal_3)
-
-        # sum up all embeddings
-        embedding = typeEvnt_emb + id_emb + typeVal_0_emb + typeVal_1_emb + typeVal_2_emb + typeVal_3_emb + t2v_emb
-    
-        # "given" embedding
-        # if self.GIVEN:
-        #     given = torch.ones((bs, length, self.d_model)).long().to(x.device)  # start as T
-        #     if not is_encoder:
-        #         # mask missing values that need prediction...
-        #         given[:, self.start_token_len :, :] = 0
-        #     #given = torch.cat(given.chunk(d_y, dim=-1), dim=1).squeeze(-1)
-        #     if self.null_value is not None:
-        #         # mask null values
-        #         null_mask = (y != self.null_value).squeeze(-1)
-        #         given *= null_mask
-        #     given_emb = self.given_emb(given)
-        #     embedding += torch.sum(given_emb, -2)
-
-
+        embedding = None
         if is_encoder:
-            for conv in self.downsize_convs:
-                emb = conv(emb)
-                length //= 2
+            typeEvnt = torch.cat((sourceType, event), -1).int()
+            _id = torch.from_numpy(id.to(torch.int64).cpu().numpy()).to(y.device)
+            #torch.cat((sourceType, val_0), -1).to(y.device)
+            typeVal_0 = torch.cat((sourceType, val_0), -1).to(y.device)
+            typeVal_1 = torch.cat((sourceType, val_1), -1).to(y.device)
+            typeVal_2 = torch.cat((sourceType, val_2), -1).to(y.device)
+            typeVal_3 = torch.cat((sourceType, val_3), -1).to(y.device)
 
+            typeEvnt_emb    = torch.sum(self.typeEvnt_emb(typeEvnt), -2)
+            id_emb          = torch.sum(self.id_emb(_id), -2)
+            typeVal_0_emb   = self.typeVal_emb(typeVal_0)
+            typeVal_1_emb   = self.typeVal_emb(typeVal_1)
+            typeVal_2_emb   = self.typeVal_emb(typeVal_2)
+            typeVal_3_emb   = self.typeVal_emb(typeVal_3)
+
+            # sum up all embeddings
+            embedding = typeEvnt_emb + id_emb + typeVal_0_emb + typeVal_1_emb + typeVal_2_emb + typeVal_3_emb + t2v_emb
         
+        else:
+            # sum up all embeddings
+            embedding = t2v_emb + id_emb
+
+        # if is_encoder:
+        #     for conv in self.downsize_convs:
+        #         emb = conv(emb)
+        #         length //= 2
+
         return embedding, torch.zeros_like(embedding)
 
 

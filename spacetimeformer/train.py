@@ -111,9 +111,9 @@ def create_model(config):
     elif config.dset == "toy2":
         x_dim = 8
         y_dim = 22
-    #@todo: configure dataset decker
+    # @todo configure dataset decker
     elif config.dset == "decker":
-        x_dim = 7
+        x_dim = 8
         y_dim = 7
 
     assert x_dim is not None
@@ -266,7 +266,7 @@ def create_dset(config):
     elif config.dset == "decker":
         
         #data_path = config.data_path
-        data_path = "/home/hein/MasterThesis/MasterThesis/ML/boilerplate/tf2/2022.02.10.csv"
+        data_path = "/home/hein/MasterThesis/MasterThesis/Preprocessing/TrainData/2022.02.03"
         target_cols = [
                 "val_0",
                 "val_1",
