@@ -11,6 +11,8 @@ warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 import spacetimeformer as stf
 
+torch.backends.cudnn.benchmark = False
+
 _MODELS = ["spacetimeformer", "mtgnn", "lstm", "lstnet", "linear"]
 
 _DSETS = [
@@ -113,7 +115,7 @@ def create_model(config):
         y_dim = 22
     # @todo configure dataset decker
     elif config.dset == "decker":
-        x_dim = 8
+        x_dim = 4
         y_dim = 7
 
     assert x_dim is not None

@@ -373,7 +373,7 @@ class AttentionLayer(nn.Module):
 
         if self.mix:
             out = out.transpose(2, 1).contiguous()
-        out = out.view(B, L, -1)
+        out = out.reshape(B, L, -1)
 
         if not output_attn:
             assert attn is None

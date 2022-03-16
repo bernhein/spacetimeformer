@@ -48,6 +48,4 @@ checkpoints/
 
 .vscode
 *.csv
-spacetimeformer/data/csv_dataset.py
-spacetimeformer/data/timefeatures.py
-spacetimeformer/data/stf_model_checkpoints/temporal_decker_160-40-mae_995661663/temporal_decker_160-40-maeepoch=22-val/mse=455703.37.ckpt
+spacetimeformer/data/stf_model_checkpoints/

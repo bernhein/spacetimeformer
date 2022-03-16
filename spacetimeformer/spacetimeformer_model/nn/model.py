@@ -53,7 +53,7 @@ class Spacetimeformer(nn.Module):
         norm: str = "layer",                    # normalization type
         initial_downsample_convs: int = 0,      # initial downsampling convs
         intermediate_downsample_convs: int = 0, # intermediate downsampling convs
-        device=torch.device("cuda:0"),          # device
+        device =  torch.device("cuda:0"), # device = torch.device('cpu'),         # device
         null_value: float = None,               # null value
         verbose: bool = True,                   # verbose
     ):

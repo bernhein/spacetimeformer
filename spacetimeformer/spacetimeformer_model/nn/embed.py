@@ -66,9 +66,9 @@ class SpacetimeformerEmbedding(nn.Module):
 
         if self.method == "spatio-temporal-event":
             #self.var_emb = nn.Embedding(num_embeddings=d_y, embedding_dim=d_model)
-            self.typeEvnt_emb   = nn.Embedding(num_embeddings=26, embedding_dim=d_model) # sourceType & eventName
-            self.id_emb         = nn.Embedding(num_embeddings=23, embedding_dim=d_model) # id
-            self.typeVal_emb    = nn.Linear(2, d_model)  # sourceType & value & value idx (0..3)
+            self.typeEvnt_emb   = nn.Embedding(num_embeddings=54, embedding_dim=d_model) # sourceType & eventName
+            self.id_emb         = nn.Embedding(num_embeddings=75, embedding_dim=d_model) # id
+            self.typeVal_emb    = nn.Linear(5, d_model)  # sourceType & value & value idx (0..3)
             self.typeVal_0_emb    = nn.Linear(2, d_model)  # sourceType & value & value idx (0..3)
             self.typeVal_1_emb    = nn.Linear(2, d_model)  # sourceType & value & value idx (0..3)
             self.typeVal_2_emb    = nn.Linear(2, d_model)  # sourceType & value & value idx (0..3)
@@ -200,23 +200,27 @@ class SpacetimeformerEmbedding(nn.Module):
         val_0, val_1, val_2, val_3, sourceType, id, event = torch.split(y, 1, dim=-1) 
 
         embedding = None
+        _id     = torch.from_numpy(id.to(torch.int64).cpu().numpy()).to(y.device)
+        id_emb  = torch.sum(self.id_emb(_id), -2)
         if is_encoder:
             typeEvnt = torch.cat((sourceType, event), -1).int()
-            _id = torch.from_numpy(id.to(torch.int64).cpu().numpy()).to(y.device)
             #torch.cat((sourceType, val_0), -1).to(y.device)
+            # typeVal = torch.cat((sourceType, val_0, val_1, val_2, val_3), -1).to(y.device)
             typeVal_0 = torch.cat((sourceType, val_0), -1).to(y.device)
             typeVal_1 = torch.cat((sourceType, val_1), -1).to(y.device)
             typeVal_2 = torch.cat((sourceType, val_2), -1).to(y.device)
             typeVal_3 = torch.cat((sourceType, val_3), -1).to(y.device)
 
             typeEvnt_emb    = torch.sum(self.typeEvnt_emb(typeEvnt), -2)
-            id_emb          = torch.sum(self.id_emb(_id), -2)
-            typeVal_0_emb   = self.typeVal_emb(typeVal_0)
-            typeVal_1_emb   = self.typeVal_emb(typeVal_1)
-            typeVal_2_emb   = self.typeVal_emb(typeVal_2)
-            typeVal_3_emb   = self.typeVal_emb(typeVal_3)
+            
+            # typeVal_emb   = self.typeVal_emb(typeVal)
+            typeVal_0_emb   = self.typeVal_0_emb(typeVal_0)
+            typeVal_1_emb   = self.typeVal_1_emb(typeVal_1)
+            typeVal_2_emb   = self.typeVal_2_emb(typeVal_2)
+            typeVal_3_emb   = self.typeVal_3_emb(typeVal_3)
 
             # sum up all embeddings
+            # embedding = typeEvnt_emb + id_emb + typeVal_emb + t2v_emb
             embedding = typeEvnt_emb + id_emb + typeVal_0_emb + typeVal_1_emb + typeVal_2_emb + typeVal_3_emb + t2v_emb
         
         else:
