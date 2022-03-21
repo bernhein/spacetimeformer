@@ -52,7 +52,7 @@ class SpacetimeformerEmbedding(nn.Module):
 
         # Time embedding
         #self.x_emb = stf.Time2Vec(d_x, embed_dim=time_emb_dim * d_x)
-        self.x_emb = stf.Time2Vec(d_x, embed_dim=d_model)
+        self.x_embedder = stf.Time2Vec(d_x, embed_dim=d_model)
 
         # if self.method == "temporal":
         #     y_emb_inp_dim = d_y + (time_emb_dim * d_x)
@@ -62,17 +62,17 @@ class SpacetimeformerEmbedding(nn.Module):
         # self.y_emb = nn.Linear(y_emb_inp_dim, d_model)
 
         if self.method == "spatio-temporal":
-            self.var_emb = nn.Embedding(num_embeddings=d_y, embedding_dim=d_model)
+            self.var_embedder = nn.Embedding(num_embeddings=d_y, embedding_dim=d_model)
 
         if self.method == "spatio-temporal-event":
             #self.var_emb = nn.Embedding(num_embeddings=d_y, embedding_dim=d_model)
-            self.typeEvnt_emb   = nn.Embedding(num_embeddings=54, embedding_dim=d_model) # sourceType & eventName
-            self.id_emb         = nn.Embedding(num_embeddings=75, embedding_dim=d_model) # id
-            self.typeVal_emb    = nn.Linear(5, d_model)  # sourceType & value & value idx (0..3)
-            self.typeVal_0_emb    = nn.Linear(2, d_model)  # sourceType & value & value idx (0..3)
-            self.typeVal_1_emb    = nn.Linear(2, d_model)  # sourceType & value & value idx (0..3)
-            self.typeVal_2_emb    = nn.Linear(2, d_model)  # sourceType & value & value idx (0..3)
-            self.typeVal_3_emb    = nn.Linear(2, d_model)  # sourceType & value & value idx (0..3)
+            self.typeEvnt_embedder   = nn.Embedding(num_embeddings=54, embedding_dim=d_model) # sourceType & eventName
+            self.id_embedder         = nn.Embedding(num_embeddings=75, embedding_dim=d_model) # id
+            # self.typeVal_emb    = nn.Linear(5, d_model)  # sourceType & value & value idx (0..3)
+            self.typeVal_0_embedder    = nn.Linear(2, d_model)  # sourceType & value & value idx (0..3)
+            self.typeVal_1_embedder    = nn.Linear(2, d_model)  # sourceType & value & value idx (0..3)
+            self.typeVal_2_embedder    = nn.Linear(2, d_model)  # sourceType & value & value idx (0..3)
+            self.typeVal_3_embedder    = nn.Linear(2, d_model)  # sourceType & value & value idx (0..3)
 
         self.start_token_len = start_token_len
         self.given_emb = nn.Embedding(num_embeddings=2, embedding_dim=d_model)
@@ -87,6 +87,7 @@ class SpacetimeformerEmbedding(nn.Module):
         self.null_value = null_value
 
     def __call__(self, y, x, is_encoder=True):
+        self.device = x.device
         if self.method == "spatio-temporal":
             val_time_emb, space_emb, var_idxs = self.spatio_temporal_embed(
                 y, x, is_encoder
@@ -183,7 +184,29 @@ class SpacetimeformerEmbedding(nn.Module):
 
         return val_time_emb, var_emb, var_idx_true
 
-    
+    def getEmbeddingVal(self,  key:str, val):
+        if key == 'typeEvent':
+            res = torch.sum(self.typeEvnt_embedder(val), -2)
+            return res.view(res.shape[1],res.shape[2])
+        elif key == 'id':
+            _id     = val.to(torch.int64)
+            res = torch.sum(self.id_embedder(_id), -2)
+            r = res.view(res.shape[1],res.shape[2])
+            return r
+        elif key == 'typeVal_0':
+            res = self.typeVal_0_embedder(val)
+            r = res.view(res.shape[1],res.shape[2])
+            return r
+        elif key == 'typeVal_1':
+            res = self.typeVal_0_embedder(val)
+            return res.view(res.shape[1],res.shape[2])
+        elif key == 'typeVal_2':
+            res = self.typeVal_0_embedder(val)
+            return res.view(res.shape[1],res.shape[2])
+        elif key == 'typeVal_3':
+            res = self.typeVal_0_embedder(val)
+            return res.view(res.shape[1],res.shape[2])
+
     def spatio_temporal_event_embed(self, y, x, is_encoder=True):
         bs, length, d_y = y.shape # batch size, length, dimension of y
 
@@ -194,14 +217,14 @@ class SpacetimeformerEmbedding(nn.Module):
         if not self.TIME:
             x = torch.zeros_like(x)
             
-        t2v_emb = self.x_emb(x)
+        t2v_emb = self.x_embedder(x)
         # value embeddings
         # splitted = torch.split(y, 1, dim=-1)
         val_0, val_1, val_2, val_3, sourceType, id, event = torch.split(y, 1, dim=-1) 
 
         embedding = None
         _id     = torch.from_numpy(id.to(torch.int64).cpu().numpy()).to(y.device)
-        id_emb  = torch.sum(self.id_emb(_id), -2)
+        id_emb  = torch.sum(self.id_embedder(_id), -2)
         if is_encoder:
             typeEvnt = torch.cat((sourceType, event), -1).int()
             #torch.cat((sourceType, val_0), -1).to(y.device)
@@ -211,13 +234,13 @@ class SpacetimeformerEmbedding(nn.Module):
             typeVal_2 = torch.cat((sourceType, val_2), -1).to(y.device)
             typeVal_3 = torch.cat((sourceType, val_3), -1).to(y.device)
 
-            typeEvnt_emb    = torch.sum(self.typeEvnt_emb(typeEvnt), -2)
+            typeEvnt_emb    = torch.sum(self.typeEvnt_embedder(typeEvnt), -2)
             
             # typeVal_emb   = self.typeVal_emb(typeVal)
-            typeVal_0_emb   = self.typeVal_0_emb(typeVal_0)
-            typeVal_1_emb   = self.typeVal_1_emb(typeVal_1)
-            typeVal_2_emb   = self.typeVal_2_emb(typeVal_2)
-            typeVal_3_emb   = self.typeVal_3_emb(typeVal_3)
+            typeVal_0_emb   = self.typeVal_0_embedder(typeVal_0)
+            typeVal_1_emb   = self.typeVal_1_embedder(typeVal_1)
+            typeVal_2_emb   = self.typeVal_2_embedder(typeVal_2)
+            typeVal_3_emb   = self.typeVal_3_embedder(typeVal_3)
 
             # sum up all embeddings
             # embedding = typeEvnt_emb + id_emb + typeVal_emb + t2v_emb
