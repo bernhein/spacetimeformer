@@ -185,6 +185,8 @@ class SpacetimeformerEmbedding(nn.Module):
         return val_time_emb, var_emb, var_idx_true
 
     def getEmbeddingVal(self,  key:str, val):
+        val = val.to(self.device)
+
         if key == 'typeEvent':
             res = torch.sum(self.typeEvnt_embedder(val), -2)
             return res.view(res.shape[1],res.shape[2])

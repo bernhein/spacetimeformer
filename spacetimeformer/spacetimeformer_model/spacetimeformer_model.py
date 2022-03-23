@@ -5,7 +5,10 @@ from torch import nn
 import torch.nn.functional as F
 import pytorch_lightning as pl
 import torchmetrics
-
+import pandas as pd
+import numpy as np
+import wandb
+from torch.utils.tensorboard import SummaryWriter
 import spacetimeformer as stf
 
 
@@ -50,6 +53,7 @@ class Spacetimeformer_Forecaster(stf.Forecaster):
         time_emb_dim: int = 6,
         null_value: float = None,
         verbose=True,
+        comment="stf"
     ):
         super().__init__(l2_coeff=l2_coeff, loss=loss, linear_window=linear_window)
         self.spacetimeformer = stf.spacetimeformer_model.nn.Spacetimeformer(
@@ -83,7 +87,17 @@ class Spacetimeformer_Forecaster(stf.Forecaster):
             time_emb_dim=time_emb_dim,
             verbose=True,
             null_value=null_value,
+            
         )
+        self.writer = {
+            'typeEvent': SummaryWriter(comment=comment + "-typeEvent"),
+            'id':SummaryWriter(comment=comment + "-id"),
+            'typeVal_0':SummaryWriter(comment=comment + "-typeVal_0"),
+            'typeVal_1':SummaryWriter(comment=comment + "-typeVal_1"),
+            'typeVal_2':SummaryWriter(comment=comment + "-typeVal_2"),
+            'typeVal_3':SummaryWriter(comment=comment + "-typeVal_3"),
+        }
+
         self.start_token_len = start_token_len
         self.init_lr = init_lr
         self.base_lr = base_lr
@@ -108,6 +122,139 @@ class Spacetimeformer_Forecaster(stf.Forecaster):
         qprint(f"\tWarmup Steps: {warmup_steps}")
         qprint(f"\tNormalization Scheme: {norm}")
         qprint(f" ***                         *** ")
+
+
+
+        # Set up embedding Data for wandb
+
+        # words
+        motors_src = "/home/hein/MasterThesis/MasterThesis/motors.json"
+        valves_src ="/home/hein/MasterThesis/MasterThesis/valves.json"
+
+        motors_data = pd.read_json(motors_src)
+        valves_data = pd.read_json(valves_src)
+        # get unique file names
+        motor_names = motors_data['LogfileName'].unique()
+        valve_names = valves_data['LogfileName'].unique()
+        sensor_names = motors_data['SensorBMK'].unique()
+        
+        # unique events
+        _motor_events = ['Start_RT','Start_FT', 'Fault_RT', 'Fault_FT']
+        _axis_events = ['TargetChange_RT', 'TargetChange_FT', 'VeloChange_RT', 'VeloChange_FT', 'ERR_RT', 'ERR_FT', 'Start_RT', 'Start_FT', 'Halt_RT', 'Halt_FT', 'Reset_RT', 'Reset_FT']
+        _freqConv_events = ['Start_RT', 'Start_FT', 'TargetVeloReached_RT', 'TargetVeloReached_FT', 'RelBrake_RT', 'RelBrake_FT', 'CW_RT', 'CW_FT', 'Error_RT', 'Error_FT']
+        _valve_events = ['Input_1_RT', 'Input_1_FT', 'Input_2_RT', 'Input_2_FT', 'Sensor_1_RT', 'Sensor_1_FT', 'Sensor_2_RT', 'Sensor_2_FT']
+        _mode_events = ['ControlVoltage', 'ControlVoltage_FT', 'Auto_RT', 'Auto_FT', 'Manual_RT', 'Manual_FT', 'BasePosBusy_RT', 'BasePosBusy_FT', 'BasePosErr_RT', 'BasePosErr_FT', 'ToolChgByOperatorEnable_RT', 'ToolChgByOperatorEnable_FT', 'ToolChgSemiAuto_RT', 'ToolChgSemiAuto_FT', 'Fault_RT', 'Fault_FT', 'FaultRst_RT', 'FaultRst_FT', 'GenerRst_RT', 'GenerRst_FT', 'AirPressureOK_RT', 'AirPressureOK_FT', 'ReleaseAx_RT', 'ReleaseAx_FT', 'ESTOP_RT', 'ESTOP_FT']
+        
+        _events = list(set(_motor_events + _axis_events + _freqConv_events + _valve_events + _mode_events))
+
+        # create one hot encoding for events
+        event_lookup_table = {}
+        e_idx = 0
+        for x in _events:
+            event_lookup_table[x] = e_idx
+            e_idx += 1
+        self.emb_counts={
+            'typeEvent': 54,
+            'id':75,
+            'typeVal_0':400,
+            'typeVal_1':400,
+            'typeVal_2':400,
+            'typeVal_3':400,
+        }
+
+        # Where to save all the data
+        self.embeddingObservData = {}
+
+        typeVals = [f'typeVal_{x}' for x in range(4)]
+        for embedding_type in ['typeEvent', 'id'] + typeVals:
+
+            self.cols = [f'D_{i}' for i in range(self.spacetimeformer.embedding.d_model)]
+            labels = None
+            vals = None
+
+            if embedding_type in typeVals: # typeVal_x
+                vals = (torch.arange(self.emb_counts[embedding_type])/10).view(1, self.emb_counts[embedding_type], 1)
+                labels = [f'{i/10}' for i in range(self.emb_counts[embedding_type])]
+
+                motor_event  = [f'motor_{x/10}'    for x in range(self.emb_counts[embedding_type])]
+                a_event      = [f'axis_{x/10}'     for x in range(self.emb_counts[embedding_type])]
+                FC_event     = [f'FC_{x/10}'       for x in range(self.emb_counts[embedding_type])]
+                iValve_event = [f'iValve_{x/10}'   for x in range(self.emb_counts[embedding_type])]
+                mValve_event = [f'mValve_{x/10}'   for x in range(self.emb_counts[embedding_type])]
+                mode_event   = [f'mode_{x/10}'     for x in range(self.emb_counts[embedding_type])]
+
+                type_axis       = [1  for x in range(self.emb_counts[embedding_type])] # np.empty(len(_axis_events))
+                type_FC         = [2  for x in range(self.emb_counts[embedding_type])] # np.empty(len(_freqConv_events))
+                type_motor      = [3  for x in range(self.emb_counts[embedding_type])] # np.empty(len(_motor_events))
+                type_iValve     = [20 for x in range(self.emb_counts[embedding_type])] # np.empty(len(_valve_events))
+                type_mValve     = [21 for x in range(self.emb_counts[embedding_type])] # np.empty(len(_valve_events))
+                type_mode       = [30 for x in range(self.emb_counts[embedding_type])] # np.empty(len(_mode_events))
+
+                e_axis      = [x/10 for x in range(self.emb_counts[embedding_type])]
+                e_fc        = [x/10 for x in range(self.emb_counts[embedding_type])]
+                e_motor     = [x/10 for x in range(self.emb_counts[embedding_type])]
+                e_iValve    = [x/10 for x in range(self.emb_counts[embedding_type])]
+                e_mValve    = [x/10 for x in range(self.emb_counts[embedding_type])]
+                e_mode      = [x/10 for x in range(self.emb_counts[embedding_type])]
+                
+                first = type_axis + type_FC + type_motor + type_iValve + type_mValve + type_mode
+                second = e_axis + e_fc + e_motor + e_iValve + e_mValve + e_mode
+
+                # create tensor
+                t = torch.FloatTensor([[first, second]])
+
+                #create embedding observation data
+                vals = t.view(1,len(first),2).type(torch.float)
+                labels = motor_event + a_event + FC_event + iValve_event + mValve_event + mode_event
+
+            elif embedding_type == 'typeEvent':
+                # list(set(_motor_events + _axis_events + _freqConv_events + _valve_events + _mode_events))
+                motor_event = [f'motor_{x}' for x in _motor_events]
+                a_event = [f'axis_{x}' for x in _axis_events]
+                FC_event = [f'FC_{x}' for x in _freqConv_events]
+                iValve_event = [f'iValve_{x}' for x in _valve_events]
+                mValve_event = [f'mValve_{x}' for x in _valve_events]
+                mode_event = [f'mode_{x}' for x in _mode_events]
+
+                type_axis       = [1  for x in range(len(_axis_events))]# np.empty(len(_axis_events))
+                type_FC         = [2  for x in range(len(_freqConv_events))] # np.empty(len(_freqConv_events))
+                type_motor      = [3  for x in range(len(_motor_events))] #np.empty(len(_motor_events))
+                type_iValve     = [20 for x in range(len(_valve_events))] # np.empty(len(_valve_events))
+                type_mValve     = [21 for x in range(len(_valve_events))] # np.empty(len(_valve_events))
+                type_mode       = [30 for x in range(len(_mode_events))] # np.empty(len(_mode_events))
+
+                e_axis  = [event_lookup_table[x] for x in _axis_events]
+                e_fc    = [event_lookup_table[x] for x in _freqConv_events]
+                e_motor = [event_lookup_table[x] for x in _motor_events]
+                e_iValve    = [event_lookup_table[x] for x in _valve_events]
+                e_mValve    = [event_lookup_table[x] for x in _valve_events]
+                e_mode      = [event_lookup_table[x] for x in _mode_events]
+                
+                first = type_axis + type_FC + type_motor + type_iValve + type_mValve + type_mode
+                second = e_axis + e_fc + e_motor + e_iValve + e_mValve + e_mode
+
+                # create tensor
+                t = torch.FloatTensor([[first, second]])
+
+                # create embedding observation data
+                vals = t.view(1,len(first),2).type(torch.int64)
+                labels = motor_event + a_event + FC_event + iValve_event + mValve_event + mode_event
+
+            elif embedding_type == 'id':
+                vals = torch.arange(self.emb_counts[embedding_type]).view(1,self.emb_counts[embedding_type],1)
+                labels = list(motor_names) + list(valve_names) + list(sensor_names) + ['Mode']
+
+            else:
+                vals = torch.arange(self.emb_counts[embedding_type]).view(1, self.emb_counts[embedding_type], 1)
+        
+            # correct device
+            # vals = vals.to(self.device)
+
+            # add data
+            self.embeddingObservData[f'{embedding_type}'] = {
+                'vals': vals,
+                'labels': labels
+            }
 
     @property
     def train_step_forward_kwargs(self):
@@ -259,6 +406,42 @@ class Spacetimeformer_Forecaster(stf.Forecaster):
             },
         }
 
+    # def on_train_start(self) -> None:
+    def on_train_epoch_end(self) -> None:
+        
+        typeVals = [f'typeVal_{x}' for x in range(4)]
+
+        builded_embeddings = {}
+        for embedding_type in ['typeEvent', 'id'] + typeVals:
+
+            vals = self.embeddingObservData[embedding_type]['vals'] # .to(self.device)
+
+            embed_space = self.spacetimeformer.embedding.getEmbeddingVal(key=embedding_type, val=vals),
+            df = pd.DataFrame(
+                embed_space[0].detach().cpu().numpy(),
+                columns=self.cols
+            )
+            df['LABELS'] = self.embeddingObservData[embedding_type]['labels']
+
+            builded_embeddings[embedding_type] = df
+
+            # table = wandb.Table(columns=df.columns.to_list(), data=df.values)
+
+            # self.logger.log_table(key=f'{self.embeddingObservData[embedding_type]}', columns=columns, data=data)
+            self.logger.log_table(key=f'{embedding_type}', dataframe=df, step=self.trainer.global_step)
+            self.writer[embedding_type].add_embedding(embed_space[0], metadata=self.embeddingObservData[embedding_type]['labels'], global_step=self.trainer.global_step)
+            
+        
+        
+            
+        return super().on_train_epoch_end()
+        # return super().on_train_start()
+
+    # def on_train_epoch_end(self) -> None:
+
+    #     self.spacetimeformer.embedding.getEmbeddingVal()
+    #     self.log()
+    #     return super().on_train_epoch_end()
     @classmethod
     def add_cli(self, parser):
         super().add_cli(parser)
