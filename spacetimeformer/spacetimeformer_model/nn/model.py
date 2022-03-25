@@ -94,10 +94,10 @@ class Spacetimeformer(nn.Module):
             "performer_attn_kernel": performer_attn_kernel,
             "performer_redraw_interval": performer_redraw_interval,
         }
-        GlobalSelfAttn = self._global_attn_switch(global_self_attn, **attn_kwargs)
+        GlobalSelfAttn  = self._global_attn_switch(global_self_attn, **attn_kwargs)
         GlobalCrossAttn = self._global_attn_switch(global_cross_attn, **attn_kwargs)
-        LocalSelfAttn = self._local_attn_switch(local_self_attn, **attn_kwargs)
-        LocalCrossAttn = self._local_attn_switch(local_cross_attn, **attn_kwargs)
+        LocalSelfAttn   = self._local_attn_switch(local_self_attn, **attn_kwargs)
+        LocalCrossAttn  = self._local_attn_switch(local_cross_attn, **attn_kwargs)
 
         self.encoder = Encoder(
             attn_layers=[

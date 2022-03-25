@@ -1,15 +1,10 @@
 from argparse import ArgumentParser
 import random
 import sys
-import warnings
 import os
-import numpy as np
 import pytorch_lightning as pl
 import torch
-from pytorch_lightning.loggers import WandbLogger, TensorBoardLogger
-
-# from torch.utils.tensorboard import SummaryWriter
-# from pytorch_lightning.loggers import TensorBoardLogger
+from pytorch_lightning.loggers import WandbLogger
 
 import spacetimeformer as stf
 import pandas as pd
@@ -241,6 +236,8 @@ def main(args):
     ), "Please set environment variables `STF_WANDB_ACCT` and `STF_WANDB_PROJ` with \n\
         your wandb user/organization name and project title, respectively."
     
+    
+    wandb.tensorboard.patch(save=False, tensorboardX=True, root_logdir="./spacetimeformer/spacetimeformer/data/stf_LOG_DIR")
     experiment = wandb.init(
         project=project,
         entity=entity,
@@ -249,7 +246,6 @@ def main(args):
         reinit=True,
         #sync_tensorboard=True
     )
-    wandb.tensorboard.patch(save=False, tensorboardX=True)
     config = wandb.config
     wandb.run.name = args.run_name
     wandb.run.save()
@@ -273,91 +269,23 @@ def main(args):
     callbacks = create_callbacks(args)
     test_samples = next(iter(data_module.test_dataloader()))
 
-    # if args.wandb and args.plot:
-    #     callbacks.append(
-    #         stf.plot.PredictionPlotterCallback(
-    #             test_samples, total_samples=min(8, args.batch_size)
-    #         )
-    #     )
-    # if args.wandb and args.model == "spacetimeformer" and args.attn_plot:
+    if args.wandb and args.plot:
+        callbacks.append(
+            stf.plot.PredictionPlotterCallback(
+                test_samples, total_samples=min(8, args.batch_size)
+            )
+        )
+    if args.wandb and args.model == "spacetimeformer" and args.attn_plot:
 
-        # callbacks.append(
-        #     stf.plot.AttentionMatrixCallback(
-        #         test_samples,
-        #         layer=0,
-        #         total_samples=min(16, args.batch_size),
-        #         raw_data_dir=wandb.run.dir,
-        #     )
-        # )
+        callbacks.append(
+            stf.plot.AttentionMatrixCallback(
+                test_samples,
+                layer=0,
+                total_samples=min(16, args.batch_size),
+                raw_data_dir=wandb.run.dir,
+            )
+        )    
 
-    # callbacks.append(
-    #     stf.callbacks.EmbeddingCallback(
-    #         d_model=args.d_model
-    #     )
-    # )
-    # writer = SummaryWriter(wandb.run.dir)
-    # x_weight = forecaster.spacetimeformer.embedding.x_embedder.weight
-    id_weight = forecaster.spacetimeformer.embedding.id_embedder.weight
-    # type_weight = forecaster.spacetimeformer.embedding.type_emb.weight
-    # event_weight = forecaster.spacetimeformer.embedding.event_emb.weight
-    typeEvent_weight = forecaster.spacetimeformer.embedding.typeEvnt_embedder.weight
-    typeVal_0_weight = forecaster.spacetimeformer.embedding.typeVal_0_embedder.weight
-    typeVal_1_weight = forecaster.spacetimeformer.embedding.typeVal_1_embedder.weight
-    typeVal_2_weight = forecaster.spacetimeformer.embedding.typeVal_2_embedder.weight
-    typeVal_3_weight = forecaster.spacetimeformer.embedding.typeVal_3_embedder.weight
-
-
-    
-
-    
-    # words = tokenizer.vocab.keys()
-    # word_embedding = model.embeddings.word_embeddings.weight
-    # writer.add_embedding(x_weight,
-    #     metadata = words,
-    #     tag = f'x-timestamp embedding'
-    # )
-    # writer.add_embedding(id_weight,
-    #     metadata= words,
-    #     tag = 'id embedding'
-    # )
-    # writer.add_embedding(typeEvent_weight,
-    # #    metadata= words,
-    #     tag = 'typeEvent embedding'
-    # )
-    # # writer.add_embedding(event_weight,
-    # #     metadata= words,
-    # #     tag = 'typeEvnt embedding'
-    # # )
-    # # writer.add_embedding(type_weight,
-    # #     metadata= words,
-    # #     tag = 'typeEvnt embedding'
-    # # )
-    # writer.add_embedding(typeVal_0_weight,
-    # #    metadata= words,
-    #     tag = 'typeVal_0 embedding'
-    # )
-    # writer.add_embedding(typeVal_1_weight,
-    # #    metadata= words,
-    #     tag = 'typeVal_1 embedding'
-    # )
-    # writer.add_embedding(typeVal_2_weight,
-    # #    metadata= words,
-    #     tag = 'typeVal_2 embedding'
-    # )
-    # writer.add_embedding(typeVal_3_weight,
-    # #    metadata= words,
-    #     tag = 'typeVal_3 embedding'
-    # )
-    # writer.close()
-    # tbl_embeddings = TensorBoardLogger("tb_logs", name="spaceTimeFormer")
-    # tbl_embeddings #.log_embedding(writer, id_weight, words, "id embedding")
-
-    # callbacks.append(writer)
-
-
-    
-
-    tb_logger = TensorBoardLogger('tb_logs', 'test')
     logger.watch(forecaster, log="all")
     
 
