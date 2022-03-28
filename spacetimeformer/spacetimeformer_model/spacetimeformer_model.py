@@ -19,7 +19,7 @@ class Spacetimeformer_Forecaster(stf.Forecaster):
         self,
         d_y: int = 1,
         d_x: int = 4,
-        start_token_len: int = 64,
+        # start_token_len: int = 64,
         attn_factor: int = 5,
         d_model: int = 512,
         n_heads: int = 8,
@@ -52,7 +52,7 @@ class Spacetimeformer_Forecaster(stf.Forecaster):
         loss: str = "nll",
         linear_window: int = 0,
         class_loss_imp: float = 0.1,
-        time_emb_dim: int = 6,
+        # time_emb_dim: int = 6,
         null_value: float = None,
         verbose=True,
         comment="stf"
@@ -61,7 +61,7 @@ class Spacetimeformer_Forecaster(stf.Forecaster):
         self.spacetimeformer = stf.spacetimeformer_model.nn.Spacetimeformer(
             d_y=d_y,
             d_x=d_x,
-            start_token_len=start_token_len,
+            # start_token_len=start_token_len,
             attn_factor=attn_factor,
             d_model=d_model,
             n_heads=n_heads,
@@ -86,7 +86,7 @@ class Spacetimeformer_Forecaster(stf.Forecaster):
             embed_method=embed_method,
             performer_attn_kernel=performer_kernel,
             performer_redraw_interval=performer_redraw_interval,
-            time_emb_dim=time_emb_dim,
+            # time_emb_dim=time_emb_dim,
             verbose=True,
             null_value=null_value,    
         )
@@ -101,7 +101,7 @@ class Spacetimeformer_Forecaster(stf.Forecaster):
         }
         self.motors_data, self.valves_data, self.embedding_events, self.embeddingObservData, self.cols = tensorboardWriter(d_model=d_model)
 
-        self.start_token_len = start_token_len
+        # self.start_token_len = start_token_len
         self.init_lr = init_lr
         self.base_lr = base_lr
         self.warmup_steps = warmup_steps
@@ -330,7 +330,6 @@ class Spacetimeformer_Forecaster(stf.Forecaster):
         ################################
         # build combinations of event and type and id embeddings 
 
-        self.cols
 
         df_axis = pd.DataFrame(columns=self.cols + ['label', 'type'])
         empty_row = {'label': [], 'type': []}
@@ -419,20 +418,18 @@ class Spacetimeformer_Forecaster(stf.Forecaster):
         # builded_embeddings['typeEvent']
         self.writer['typeEventID'].add_embedding(embed_space, metadata=lbls, global_step=self.trainer.global_step)
 
-
-            
         return super().on_train_epoch_end()
 
 
     @classmethod
     def add_cli(self, parser):
         super().add_cli(parser)
-        parser.add_argument(
-            "--start_token_len",
-            type=int,
-            required=True,
-            help="Length of decoder start token. Adds this many of the final context points to the start of the target sequence.",
-        )
+        # parser.add_argument(
+        #     "--start_token_len",
+        #     type=int,
+        #     required=True,
+        #     help="Length of decoder start token. Adds this many of the final context points to the start of the target sequence.",
+        # )
         parser.add_argument(
             "--d_model", type=int, default=256, help="Transformer embedding dimension."
         )
@@ -592,12 +589,12 @@ class Spacetimeformer_Forecaster(stf.Forecaster):
             default=0,
             help="Add downsampling Conv1Ds between encoder layers.",
         )
-        parser.add_argument(
-            "--time_emb_dim",
-            type=int,
-            default=12,
-            help="Time embedding dimension. Embed *each dimension of x* with this many learned periodic values.",
-        )
+        # parser.add_argument(
+        #     "--time_emb_dim",
+        #     type=int,
+        #     default=12,
+        #     help="Time embedding dimension. Embed *each dimension of x* with this many learned periodic values.",
+        # )
         parser.add_argument(
             "--performer_kernel",
             type=str,

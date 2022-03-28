@@ -28,14 +28,13 @@ class Spacetimeformer(nn.Module):
         self,
         d_y: int = 1,                           # dimension of the output
         d_x: int = 4,                           # dimension of the input
-        start_token_len: int = 64,              # length of the start token
+        # start_token_len: int = 64,              # length of the start token
         attn_factor: int = 5,                   # factor for the attention
         d_model: int = 512,                     # dimension of the model
         n_heads: int = 8,                       # number of heads
         e_layers: int = 2,                      # encoder layers?
         d_layers: int = 2,                      # decoder layers?
         d_ff: int = 512,                        # feedforward layer size?
-        time_emb_dim: int = 7,                  # dimension of the time embedding
         dropout_emb: float = 0.05,              # dropout for the embedding
         dropout_token: float = 0.05,            # dropout for the token
         dropout_attn_out: float = 0.05,         # dropout for the attention output
@@ -47,7 +46,7 @@ class Spacetimeformer(nn.Module):
         local_cross_attn: str = "none",         # local attention type
         performer_attn_kernel: str = "relu",    # kernel for the performer attention
         performer_redraw_interval: int = 250,   # redraw interval for the performer attention
-        embed_method: str = "spatio-temporal",  # embedding method
+        embed_method: str = "spatio-temporal-event",  # embedding method
         activation: str = "gelu",               # activation function
         post_norm: bool = True,                 # whether to apply post normalization
         norm: str = "layer",                    # normalization type
@@ -68,18 +67,17 @@ class Spacetimeformer(nn.Module):
                 local_cross_attn == "none"
             ), "Local Attention not compatible with Temporal-only embedding"
 
-        self.start_token_len = start_token_len
+        # self.start_token_len = start_token_len
         self.embed_method = embed_method
 
-        # Encoding
+        # Embedding
         self.embedding = SpacetimeformerEmbedding(
             d_y=d_y,
             d_x=d_x,
             d_model=d_model,
-            time_emb_dim=time_emb_dim,
             downsample_convs=initial_downsample_convs,
             method=embed_method,
-            start_token_len=start_token_len,
+            # start_token_len=start_token_len,
             null_value=null_value,
         )
 
@@ -154,7 +152,7 @@ class Spacetimeformer(nn.Module):
         qprint(f"LocalSelfAttn: {self.decoder.layers[0].local_self_attention}")
         qprint(f"LocalCrossAttn: {self.decoder.layers[0].local_cross_attention}")
         qprint(f"Using Embedding: {embed_method}")
-        qprint(f"Time Emb Dim: {time_emb_dim}")
+        # qprint(f"Time Emb Dim: {time_emb_dim}")
         qprint(f"Space Embedding: {self.embedding.SPACE}")
         qprint(f"Time Embedding: {self.embedding.TIME}")
         qprint(f"Val Embedding: {self.embedding.VAL}")
@@ -223,9 +221,10 @@ class Spacetimeformer(nn.Module):
 
         forecast_out = self.forecaster(dec_out)
 
-        if self.embed_method in ["spatio-temporal"]:
-            means, log_stds = self._fold_spatio_temporal(forecast_out)
-        elif self.embed_method in ["spatio-temporal-event"]:
+        # if self.embed_method in ["spatio-temporal"]:
+        #     means, log_stds = self._fold_spatio_temporal(forecast_out) 
+        # elif self.embed_method in ["spatio-temporal-event"]:
+        if self.embed_method in ["spatio-temporal-event"]:
             val_0, val_1, val_2, val_3, sourceType, id, event = torch.split(forecast_out, 1, dim=-1)
             vals = [val_0, val_1, val_2, val_3]
             means = 0
@@ -235,9 +234,9 @@ class Spacetimeformer(nn.Module):
                 log_stds += torch.std(v, dim=1)
             means = means / len(vals)
             log_stds = log_stds / len(vals)
-        else:
-            forecast_out = forecast_out[:, self.start_token_len :, :]
-            means, log_stds = forecast_out.chunk(2, dim=-1) 
+        # else:
+        #     forecast_out = forecast_out[:, self.start_token_len :, :]
+        #     means, log_stds = forecast_out.chunk(2, dim=-1) 
 
         # stabilization trick from Neural Processes papers
         stds = 1e-3 + (1.0 - 1e-3) * torch.log(1.0 + log_stds.exp())

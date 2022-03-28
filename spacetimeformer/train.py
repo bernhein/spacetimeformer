@@ -80,7 +80,7 @@ def create_model(config):
             # encoder
             d_x=x_dim,
             d_y=y_dim,
-            time_emb_dim=config.time_emb_dim,
+            # time_emb_dim=config.time_emb_dim,
             hidden_dim=config.hidden_dim,
             n_layers=config.n_layers,
             dropout_p=config.dropout_p,
@@ -90,12 +90,18 @@ def create_model(config):
             l2_coeff=config.l2_coeff,
             loss=config.loss,
             linear_window=config.linear_window,
+            # add
+            embed_method=config.embed_method,
+            # initial_downsample_convs=config.initial_downsample_convs,
+            # start_token_len=config.start_token_len,
+            d_model= config.d_model,
+            comment=args.run_name,
         )
     elif config.model == "spacetimeformer":
         forecaster = stf.spacetimeformer_model.Spacetimeformer_Forecaster(
             d_y=y_dim,
             d_x=x_dim,
-            start_token_len=config.start_token_len,
+            # start_token_len=config.start_token_len,
             attn_factor=config.attn_factor,
             d_model=config.d_model,
             n_heads=config.n_heads,
@@ -127,7 +133,6 @@ def create_model(config):
             loss=config.loss,
             linear_window=config.linear_window,
             class_loss_imp=config.class_loss_imp,
-            time_emb_dim=config.time_emb_dim,
             null_value=config.null_value,
             comment=args.run_name
         )

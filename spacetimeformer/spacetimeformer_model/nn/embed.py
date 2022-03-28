@@ -15,51 +15,18 @@ class SpacetimeformerEmbedding(nn.Module):
         d_y,      # dimension of the output
         d_x,        # dimension of the input
         d_model=256,    # dimension of the model
-        time_emb_dim=6, # dimension of the time embedding
-        method="spatio-temporal",   # method to use for embedding
+        method="spatio-temporal-event",   # method to use for embedding
         downsample_convs=1,     # number of downsampling convolutions
-        start_token_len=0,      # length of the start token
+        # start_token_len=0,      # length of the start token
         null_value=None,        # value to use for null values
-
-        
     ):
         super().__init__()
-
-        # create one hot encoding for events
-        events_ohe_lookup_table = {}
-
-        # _motor_event = ['Start_RT','Start_FT', 'Fault_RT', 'Fault_FT']
-        # _axis_events = ['TargetChange_RT', 'TargetChange_FT', 'VeloChange_RT', 'VeloChange_FT', 'ERR_RT', 'ERR_FT', 'Start_RT', 'Start_FT', 'Halt_RT', 'Halt_FT', 'Reset_RT', 'Reset_FT']
-        # _freqConv_events = ['TargetVeloReached_RT', 'Start_RT', 'Start_FT', 'TargetVeloReached_FT', 'RelBrake_RT', 'RelBrake_FT', 'CW', 'Error', 'nErrorCode']
-
-        # # unique events
-        # _events = list(set(_motor_event + _axis_events + _freqConv_events))
-        
-        # idx = 0
-
-        # for x in _events:
-        #     events_ohe_lookup_table[x] = idx
-        #     idx += 1
-
-        # self.events_ohe_lookup_table = events_ohe_lookup_table
-
         
         assert method in ["spatio-temporal-event", "spatio-temporal", "temporal"]
         self.method = method
 
-        # account for added local position indicator "relative time"
-        # d_x += 1
-
-        # Time embedding
-        #self.x_emb = stf.Time2Vec(d_x, embed_dim=time_emb_dim * d_x)
         self.x_embedder = stf.Time2Vec(d_x, embed_dim=d_model)
 
-        # if self.method == "temporal":
-        #     y_emb_inp_dim = d_y + (time_emb_dim * d_x)
-        # else:
-        #     y_emb_inp_dim = 1 + (time_emb_dim * d_x)
-
-        # self.y_emb = nn.Linear(y_emb_inp_dim, d_model)
 
         if self.method == "spatio-temporal":
             self.var_embedder = nn.Embedding(num_embeddings=d_y, embedding_dim=d_model)
@@ -74,7 +41,7 @@ class SpacetimeformerEmbedding(nn.Module):
             self.typeVal_2_embedder    = nn.Linear(2, d_model)  # sourceType & value & value idx (0..3)
             self.typeVal_3_embedder    = nn.Linear(2, d_model)  # sourceType & value & value idx (0..3)
 
-        self.start_token_len = start_token_len
+        # self.start_token_len = start_token_len
         self.given_emb = nn.Embedding(num_embeddings=2, embedding_dim=d_model)
 
         self.downsize_convs = nn.ModuleList(
@@ -119,11 +86,11 @@ class SpacetimeformerEmbedding(nn.Module):
         emb = self.y_emb(emb_inp)
 
         # "given" embedding
-        given = torch.ones((bs, length)).long().to(x.device)
-        if not is_encoder and self.GIVEN:
-            given[:, self.start_token_len :] = 0
-        given_emb = self.given_emb(given)
-        emb += given_emb
+        # given = torch.ones((bs, length)).long().to(x.device)
+        # if not is_encoder and self.GIVEN:
+        #     given[:, self.start_token_len :] = 0
+        # given_emb = self.given_emb(given)
+        # emb += given_emb
 
         if is_encoder:
             # shorten the sequence
@@ -158,9 +125,9 @@ class SpacetimeformerEmbedding(nn.Module):
         # "given" embedding
         if self.GIVEN:
             given = torch.ones((bs, length, d_y)).long().to(x.device)  # start as T
-            if not is_encoder:
-                # mask missing values that need prediction...
-                given[:, self.start_token_len :, :] = 0
+            # if not is_encoder:
+            #     # mask missing values that need prediction...
+            #     given[:, self.start_token_len :, :] = 0
             given = torch.cat(given.chunk(d_y, dim=-1), dim=1).squeeze(-1)
             if self.null_value is not None:
                 # mask null values
@@ -246,11 +213,11 @@ class SpacetimeformerEmbedding(nn.Module):
 
             # sum up all embeddings
             # embedding = typeEvnt_emb + id_emb + typeVal_emb + t2v_emb
-            embedding = typeEvnt_emb + id_emb + typeVal_0_emb + typeVal_1_emb + typeVal_2_emb + typeVal_3_emb + t2v_emb
+            embedding = t2v_emb + typeEvnt_emb + id_emb + typeVal_0_emb + typeVal_1_emb + typeVal_2_emb + typeVal_3_emb
         
         else:
             # sum up all embeddings
-            embedding = t2v_emb + id_emb
+            embedding = t2v_emb + typeEvnt_emb + id_emb
 
         # if is_encoder:
         #     for conv in self.downsize_convs:
@@ -258,15 +225,3 @@ class SpacetimeformerEmbedding(nn.Module):
         #         length //= 2
 
         return embedding, torch.zeros_like(embedding)
-
-
-    def ohe_states(self, states:str):
-            
-        states = states.split(',')
-        states = [s.strip() for s in states]
-        states = [s for s in states if s != '']
-        states = [s.lower() for s in states]
-        states = [s for s in states if s in self.state_dict]
-        states = [self.state_dict[s] for s in states]
-        states = torch.tensor(states).long().to(self.device)
-        return states
