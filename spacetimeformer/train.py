@@ -201,14 +201,14 @@ def create_callbacks(config):
             )
         )
     # @todo check if callback is needed
-    # if config.time_mask_loss:
-    #     callbacks.append(
-    #         stf.callbacks.TimeMaskedLossCallback(
-    #             start=config.time_mask_start,
-    #             end=config.target_points,
-    #             steps=config.time_mask_anneal_steps,
-    #         )
-    #     )
+    if config.time_mask_loss:
+        callbacks.append(
+            stf.callbacks.TimeMaskedLossCallback(
+                start=config.time_mask_start,
+                end=config.target_points,
+                steps=config.time_mask_anneal_steps,
+            )
+        )
     return callbacks
 
 
@@ -291,7 +291,7 @@ def main(args):
     trainer = pl.Trainer(
         gpus=args.gpus,
         callbacks=callbacks,
-        logger=logger, # [logger, tb_logger],
+        logger=logger, 
         strategy="dp",
         log_gpu_memory=True,
         gradient_clip_val=args.grad_clip_norm,
