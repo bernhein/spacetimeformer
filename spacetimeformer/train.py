@@ -7,18 +7,15 @@ import torch
 from pytorch_lightning.loggers import WandbLogger
 
 import spacetimeformer as stf
-import pandas as pd
 import wandb
 
 torch.backends.cudnn.benchmark = False
-
 
 _MODELS = ["spacetimeformer", "lstm"]
 
 _DSETS = [
     "decker"
 ]
-
 
 def create_parser():
     model = sys.argv[1]
@@ -91,9 +88,6 @@ def create_model(config):
             loss=config.loss,
             linear_window=config.linear_window,
             # add
-            # embed_method=config.embed_method,
-            # initial_downsample_convs=config.initial_downsample_convs,
-            # start_token_len=config.start_token_len,
             d_model= config.d_model,
             comment=args.run_name,
         )

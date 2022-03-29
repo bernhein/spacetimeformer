@@ -252,11 +252,6 @@ class Spacetimeformer(nn.Module):
             classifier_enc_out = self.classifier(enc_out.detach())
             classifier_out = torch.cat((classifier_enc_out, classifier_dec_out), dim=1)
             var_idxs = torch.cat((enc_var_idx, dec_var_idx), dim=1)
-        # elif self.embed_method == "spatio-temporal-event":
-        #     classifier_dec_out = self.classifier(dec_out.detach())
-        #     classifier_enc_out = self.classifier(enc_out.detach())
-        #     classifier_out = torch.cat((classifier_enc_out, classifier_dec_out), dim=1)
-        #     var_idxs = None
         else:
             classifier_out, var_idxs = None, None
 

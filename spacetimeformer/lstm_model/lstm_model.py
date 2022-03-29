@@ -74,22 +74,13 @@ class LSTM_Seq2Seq(nn.Module):
     ):
 
         # Encoder Embedding
-        # x_context, _, _ = self.stfEmbedding(
-        #     y_context, x_context, is_encoder=True  # 
-        # )
         context_emb, _, _ = self.stfEmbedding(
             y_context, x_context, is_encoder=True  # 
         )
         # Decoder Embedding
-        # x_target, _, _ = self.stfEmbedding(
-        #     y_target, x_target, is_encoder=True  # 
-        # )
         target_emb, _, _ = self.stfEmbedding(
             y_target, x_target, is_encoder=True  # 
         )
-        # if self.stfEmbedding is not None:
-        #     x_context = self.stfEmbedding(x_context)
-        #     x_target = self.stfEmbedding(x_target)
 
         pred_len = target_emb.shape[1]
         batch_size = target_emb.shape[0]
@@ -100,7 +91,6 @@ class LSTM_Seq2Seq(nn.Module):
         for i in range(batch_size_ctxt):
            hidden, cell = self.encoder(context_emb[i].unsqueeze(0))
 
-        # decoder_input = self._merge(x_context_emb[:, -1], y_context[:, -1]).unsqueeze(1)
         decoder_input = target_emb[0].unsqueeze(0)
 
         for t in range(1, batch_size):
@@ -109,12 +99,6 @@ class LSTM_Seq2Seq(nn.Module):
 
             decoder_input = target_emb[t].unsqueeze(0) # if random.random() < teacher_forcing_prob else output
 
-            # decoder_y = (
-            #     y_target[:, t].unsqueeze(1)
-            #     if random.random() < teacher_forcing_prob
-            #     else output
-            # )
-            # decoder_input = self._merge(x_target[:, t].unsqueeze(1), decoder_y)
         return outputs
 
 
@@ -149,33 +133,15 @@ class LSTM_Forecaster(stf.Forecaster):
             d_model=d_model
         )
 
-        # self.writer = {
-        #     'typeEvent':    SummaryWriter(comment=comment + "-typeEvent"),
-        #     'id':           SummaryWriter(comment=comment + "-id"),
-        #     'typeVal_0':    SummaryWriter(comment=comment + "-typeVal_0"),
-        #     'typeVal_1':    SummaryWriter(comment=comment + "-typeVal_1"),
-        #     'typeVal_2':    SummaryWriter(comment=comment + "-typeVal_2"),
-        #     'typeVal_3':    SummaryWriter(comment=comment + "-typeVal_3"),
-        #     'typeEventID':  SummaryWriter(comment=comment + "-typeEventID"),
-        # }
-        # self.motors_data, self.valves_data, self.embedding_events, self.embeddingObservData, self.cols = tensorboardWriter(d_model=d_model)
-
-
-        # self.embed_method = embed_method
 
         # Embedding
         self.embedding = SpacetimeformerEmbedding(
             d_y=d_y,
             d_x=d_x,
             d_model=d_model,
-            # time_emb_dim=time_emb_dim,
-            # downsample_convs=initial_downsample_convs,
-            # method=embed_method,
-            # start_token_len=start_token_len,
             null_value=null_value,
         )
         input_dim = d_model
-        # input_dim = (time_emb_dim if time_emb_dim > 0 else d_x) + d_y
 
         self.encoder = LSTM_Encoder(
             input_dim=input_dim,
@@ -231,10 +197,3 @@ class LSTM_Forecaster(stf.Forecaster):
         parser.add_argument(
             "--d_model", type=int, default=256, help="Transformer embedding dimension."
         )
-        # parser.add_argument(
-        #     "--embed_method",
-        #     type=str,
-        #     choices=["spatio-temporal", "temporal", "spatio-temporal-event"],
-        #     default="spatio-temporal-event",
-        #     help="Embedding method. spatio-temporal enables long-sequence spatio-temporal transformer mode while temporal recovers default architecture.",
-        # )
