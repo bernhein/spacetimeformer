@@ -76,7 +76,7 @@ class Spacetimeformer(nn.Module):
             d_x=d_x,
             d_model=d_model,
             downsample_convs=initial_downsample_convs,
-            method=embed_method,
+            # method=embed_method,
             # start_token_len=start_token_len,
             null_value=null_value,
         )

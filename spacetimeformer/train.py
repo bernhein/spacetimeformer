@@ -91,7 +91,7 @@ def create_model(config):
             loss=config.loss,
             linear_window=config.linear_window,
             # add
-            embed_method=config.embed_method,
+            # embed_method=config.embed_method,
             # initial_downsample_convs=config.initial_downsample_convs,
             # start_token_len=config.start_token_len,
             d_model= config.d_model,
@@ -128,7 +128,7 @@ def create_model(config):
             decay_factor=config.decay_factor,
             initial_downsample_convs=config.initial_downsample_convs,
             intermediate_downsample_convs=config.intermediate_downsample_convs,
-            embed_method=config.embed_method,
+            # embed_method=config.embed_method,
             l2_coeff=config.l2_coeff,
             loss=config.loss,
             linear_window=config.linear_window,

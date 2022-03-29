@@ -36,7 +36,7 @@ class Spacetimeformer_Forecaster(stf.Forecaster):
         global_cross_attn: str = "performer",
         local_cross_attn: str = "none",
         performer_kernel: str = "relu",
-        embed_method: str = "spatio-temporal-event",
+        # embed_method: str = "spatio-temporal-event",
         performer_relu: bool = True,
         performer_redraw_interval: int = 1000,
         activation: str = "gelu",
@@ -57,7 +57,7 @@ class Spacetimeformer_Forecaster(stf.Forecaster):
         verbose=True,
         comment="stf"
     ):
-        super().__init__(l2_coeff=l2_coeff, loss=loss, linear_window=linear_window)
+        super().__init__(l2_coeff=l2_coeff, loss=loss, linear_window=linear_window, comment=comment, d_model=d_model)
         self.spacetimeformer = stf.spacetimeformer_model.nn.Spacetimeformer(
             d_y=d_y,
             d_x=d_x,
@@ -83,30 +83,19 @@ class Spacetimeformer_Forecaster(stf.Forecaster):
             post_norm=post_norm,
             device=self.device,
             norm=norm,
-            embed_method=embed_method,
+            # embed_method=embed_method,
             performer_attn_kernel=performer_kernel,
             performer_redraw_interval=performer_redraw_interval,
             # time_emb_dim=time_emb_dim,
             verbose=True,
             null_value=null_value,    
         )
-        self.writer = {
-            'typeEvent':    SummaryWriter(comment=comment + "-typeEvent"),
-            'id':           SummaryWriter(comment=comment + "-id"),
-            'typeVal_0':    SummaryWriter(comment=comment + "-typeVal_0"),
-            'typeVal_1':    SummaryWriter(comment=comment + "-typeVal_1"),
-            'typeVal_2':    SummaryWriter(comment=comment + "-typeVal_2"),
-            'typeVal_3':    SummaryWriter(comment=comment + "-typeVal_3"),
-            'typeEventID':  SummaryWriter(comment=comment + "-typeEventID"),
-        }
-        self.motors_data, self.valves_data, self.embedding_events, self.embeddingObservData, self.cols = tensorboardWriter(d_model=d_model)
-
         # self.start_token_len = start_token_len
         self.init_lr = init_lr
         self.base_lr = base_lr
         self.warmup_steps = warmup_steps
         self.decay_factor = decay_factor
-        self.embed_method = embed_method
+        # self.embed_method = embed_method
         self.class_loss_imp = class_loss_imp
         self.set_null_value(null_value)
 
@@ -277,148 +266,7 @@ class Spacetimeformer_Forecaster(stf.Forecaster):
         }
 
     # def on_train_start(self) -> None:
-    def on_train_epoch_end(self) -> None:
-        
-        typeVals = [f'typeVal_{x}' for x in range(4)]
-
-        # get unique file names
-        DrillingMotor_names = self.motors_data.query("Type == 'DrillingMotor'")['LogfileName'].unique()
-        Axis_names = self.motors_data.query("Type == 'Axis'")['LogfileName'].unique()
-        FreqConverter_names = self.motors_data.query("Type == 'FreqConverter'")['LogfileName'].unique()
-        Sensor_names = self.motors_data['SensorBMK'].unique()
-        ImpulseValve_names = self.valves_data.query("Type == 'ImpulseValve'")['LogfileName'].unique()
-        MagneticValve = self.valves_data.query("Type == 'MagneticValve'")['LogfileName'].unique()
-
-        def add_type(x):
-            if x in DrillingMotor_names:
-                return 'DrillingMotor'
-            elif x in Axis_names:
-                return 'Axis'
-            elif x in FreqConverter_names:
-                return 'FreqConverter'
-            elif x in Sensor_names:
-                return 'Sensor'
-            elif x in ImpulseValve_names:
-                return 'ImpulseValve'
-            elif x in MagneticValve:
-                return 'MagneticValve'
-            else:
-                return ''
-
-
-        builded_embeddings = {}
-        for embedding_type in ['typeEvent', 'id'] + typeVals:
-
-            vals = self.embeddingObservData[embedding_type]['vals'] # .to(self.device)
-
-            embed_space = self.spacetimeformer.embedding.getEmbeddingVal(key=embedding_type, val=vals),
-            df = pd.DataFrame(
-                embed_space[0].detach().cpu().numpy(),
-                columns=self.cols
-            )
-            df['label'] = self.embeddingObservData[embedding_type]['labels']
-            df['type'] = df["label"].apply(lambda x: add_type(x))
-            lbls = df[['label', 'type']].values
-
-            # Make data available for embedding combinations
-            builded_embeddings[embedding_type] = df
-
-            # Log data to WandB and TensorBoard
-            self.logger.log_table(key=f'{embedding_type}', dataframe=df, step=self.trainer.global_step)
-            self.writer[embedding_type].add_embedding(embed_space[0], metadata=lbls, global_step=self.trainer.global_step)
-
-        ################################
-        # build combinations of event and type and id embeddings 
-
-
-        df_axis = pd.DataFrame(columns=self.cols + ['label', 'type'])
-        empty_row = {'label': [], 'type': []}
-        empty_row.update({x: [] for x in self.cols})
-
-        df_empty_row = pd.DataFrame(empty_row)
-        df_all_embeddings = df_empty_row.copy()
-        for idx, row in builded_embeddings['id'].iterrows():
-            if row['type'] == 'Axis':
-                # iterate through axis events
-                for event in self.embedding_events['axis']:
-                    event_row = builded_embeddings['typeEvent'].query(f"label == 'axis_{event}'")
-                    sum_row = event_row[self.cols] + row[self.cols]
-                    sum_row['label'] = f'{row["label"]}_{event}'
-                    sum_row['type'] = row['type']
-
-                    # append it
-                    df_all_embeddings = pd.concat([df_all_embeddings, sum_row], ignore_index=True)
-            elif row['type'] == 'DrillingMotor':
-                # iterate through axis events
-                for event in self.embedding_events['drillingMotor']:
-                    event_row = builded_embeddings['typeEvent'].query(f"label == 'motor_{event}'")
-                    sum_row = event_row[self.cols] + row[self.cols]
-                    sum_row['label'] = f'{row["label"]}_{event}'
-                    sum_row['type'] = row['type']
-
-                    # append it
-                    df_all_embeddings = pd.concat([df_all_embeddings, sum_row], ignore_index=True)
-            
-            elif row['type'] == 'FreqConverter':
-                # iterate through axis events
-                for event in self.embedding_events['freqConv']:
-                    event_row = builded_embeddings['typeEvent'].query(f"label == 'motor_{event}'")
-                    sum_row = event_row[self.cols] + row[self.cols]
-                    sum_row['label'] = f'{row["label"]}_{event}'
-                    sum_row['type'] = row['type']
-
-                    # append it
-                    df_all_embeddings = pd.concat([df_all_embeddings, sum_row], ignore_index=True)
-            elif row['type'] == 'MagneticValve':
-                # iterate through axis events
-                for event in self.embedding_events['valve']:
-                    event_row = builded_embeddings['typeEvent'].query(f"label == 'mValve_{event}'")
-                    sum_row = event_row[self.cols] + row[self.cols]
-                    sum_row['label'] = f'{row["label"]}_{event}'
-                    sum_row['type'] = row['type']
-
-                    # append it
-                    df_all_embeddings = pd.concat([df_all_embeddings, sum_row], ignore_index=True)
-            elif row['type'] == 'ImpulseValve':
-                # iterate through axis events
-                for event in self.embedding_events['valve']:
-                    event_row = builded_embeddings['typeEvent'].query(f"label == 'iValve_{event}'")
-                    sum_row = event_row[self.cols] + row[self.cols]
-                    sum_row['label'] = f'{row["label"]}_{event}'
-                    sum_row['type'] = row['type']
-
-                    # append it
-                    df_all_embeddings = pd.concat([df_all_embeddings, sum_row], ignore_index=True)
-            elif row['type'] == 'Sensor':
-
-                sum_row = row[self.cols]
-                sum_row['label'] = f'{row["label"]}_Sensor'
-                sum_row['type'] = row['type']
-
-                # append it
-                df_all_embeddings = pd.concat([df_all_embeddings, sum_row], ignore_index=True)
-            elif row['label'] == 'Mode':
-                # iterate through axis events
-                for event in self.embedding_events['mode']:
-                    event_row = builded_embeddings['typeEvent'].query(f"label == 'mode_{event}'")
-                    sum_row = event_row[self.cols] + row[self.cols]
-                    sum_row['label'] = f'{row["label"]}_{event}'
-                    sum_row['type'] = row['label']
-
-                    # append it
-                    df_all_embeddings = pd.concat([df_all_embeddings, sum_row], ignore_index=True)
-
-
-        df_all_embeddings[self.cols] = df_all_embeddings[self.cols].apply(pd.to_numeric)
-        
-        lbls = df_all_embeddings[['label', 'type']].values
-        embed_space = torch.from_numpy(df_all_embeddings[self.cols].values)
-
-        # self.embedding_events['']
-        # builded_embeddings['typeEvent']
-        self.writer['typeEventID'].add_embedding(embed_space, metadata=lbls, global_step=self.trainer.global_step)
-
-        return super().on_train_epoch_end()
+    
 
 
     @classmethod
@@ -608,10 +456,10 @@ class Spacetimeformer_Forecaster(stf.Forecaster):
             default=125,
             help="Training steps between resampling orthogonal random features for FAVOR+ attention",
         )
-        parser.add_argument(
-            "--embed_method",
-            type=str,
-            choices=["spatio-temporal", "temporal", "spatio-temporal-event"],
-            default="spatio-temporal",
-            help="Embedding method. spatio-temporal enables long-sequence spatio-temporal transformer mode while temporal recovers default architecture.",
-        )
+        # parser.add_argument(
+        #     "--embed_method",
+        #     type=str,
+        #     choices=["spatio-temporal", "temporal", "spatio-temporal-event"],
+        #     default="spatio-temporal",
+        #     help="Embedding method. spatio-temporal enables long-sequence spatio-temporal transformer mode while temporal recovers default architecture.",
+        # )

@@ -8,7 +8,11 @@ from torch.distributions import Normal
 import numpy as np
 
 import spacetimeformer as stf
-
+import pandas as pd
+import numpy as np
+import wandb
+from spacetimeformer.data.decker_format.tensorboard_writer import tensorboardWriter
+from torch.utils.tensorboard import SummaryWriter
 
 class Forecaster(pl.LightningModule, ABC):
     def __init__(
@@ -17,6 +21,8 @@ class Forecaster(pl.LightningModule, ABC):
         l2_coeff: float = 0,
         loss: str = "mse",
         linear_window: int = 0,
+        comment: str = "stf",
+        d_model: int = 256
     ):
         super().__init__()
         self._inv_scaler = lambda x: x
@@ -30,6 +36,19 @@ class Forecaster(pl.LightningModule, ABC):
             self.linear_model = stf.linear_model.LinearModel(linear_window)
         else:
             self.linear_model = lambda x: 0.0
+
+        
+        self.writer = {
+            'typeEvent':    SummaryWriter(comment=comment + "-typeEvent"),
+            'id':           SummaryWriter(comment=comment + "-id"),
+            'typeVal_0':    SummaryWriter(comment=comment + "-typeVal_0"),
+            'typeVal_1':    SummaryWriter(comment=comment + "-typeVal_1"),
+            'typeVal_2':    SummaryWriter(comment=comment + "-typeVal_2"),
+            'typeVal_3':    SummaryWriter(comment=comment + "-typeVal_3"),
+            'typeEventID':  SummaryWriter(comment=comment + "-typeEventID"),
+        }
+        self.motors_data, self.valves_data, self.embedding_events, self.embeddingObservData, self.cols = tensorboardWriter(d_model=d_model)
+
 
     def set_null_value(self, val: float) -> None:
         self.null_value = val
@@ -98,6 +117,153 @@ class Forecaster(pl.LightningModule, ABC):
             outputs=outputs, y_t=y_t, time_mask=time_mask
         )
         return loss, outputs, mask
+
+    def on_train_epoch_end(self) -> None:
+        
+        typeVals = [f'typeVal_{x}' for x in range(4)]
+
+        # get unique file names
+        DrillingMotor_names = self.motors_data.query("Type == 'DrillingMotor'")['LogfileName'].unique()
+        Axis_names = self.motors_data.query("Type == 'Axis'")['LogfileName'].unique()
+        FreqConverter_names = self.motors_data.query("Type == 'FreqConverter'")['LogfileName'].unique()
+        Sensor_names = self.motors_data['SensorBMK'].unique()
+        ImpulseValve_names = self.valves_data.query("Type == 'ImpulseValve'")['LogfileName'].unique()
+        MagneticValve = self.valves_data.query("Type == 'MagneticValve'")['LogfileName'].unique()
+
+        def add_type(x):
+            if x in DrillingMotor_names:
+                return 'DrillingMotor'
+            elif x in Axis_names:
+                return 'Axis'
+            elif x in FreqConverter_names:
+                return 'FreqConverter'
+            elif x in Sensor_names:
+                return 'Sensor'
+            elif x in ImpulseValve_names:
+                return 'ImpulseValve'
+            elif x in MagneticValve:
+                return 'MagneticValve'
+            else:
+                return ''
+
+
+        builded_embeddings = {}
+        for embedding_type in ['typeEvent', 'id'] + typeVals:
+
+            vals = self.embeddingObservData[embedding_type]['vals'] # .to(self.device)
+
+            embed_space = None
+            try:
+                embed_space = self.spacetimeformer.embedding.getEmbeddingVal(key=embedding_type, val=vals),
+            except:
+                embed_space = self.embedding.getEmbeddingVal(key=embedding_type, val=vals),
+            df = pd.DataFrame(
+                embed_space[0].detach().cpu().numpy(),
+                columns=self.cols
+            )
+            df['label'] = self.embeddingObservData[embedding_type]['labels']
+            df['type'] = df["label"].apply(lambda x: add_type(x))
+            lbls = df[['label', 'type']].values
+
+            # Make data available for embedding combinations
+            builded_embeddings[embedding_type] = df
+
+            # Log data to WandB and TensorBoard
+            self.logger.log_table(key=f'{embedding_type}', dataframe=df, step=self.trainer.global_step)
+            self.writer[embedding_type].add_embedding(embed_space[0], metadata=lbls, global_step=self.trainer.global_step)
+
+        ################################
+        # build combinations of event and type and id embeddings 
+
+
+        df_axis = pd.DataFrame(columns=self.cols + ['label', 'type'])
+        empty_row = {'label': [], 'type': []}
+        empty_row.update({x: [] for x in self.cols})
+
+        df_empty_row = pd.DataFrame(empty_row)
+        df_all_embeddings = df_empty_row.copy()
+        for idx, row in builded_embeddings['id'].iterrows():
+            if row['type'] == 'Axis':
+                # iterate through axis events
+                for event in self.embedding_events['axis']:
+                    event_row = builded_embeddings['typeEvent'].query(f"label == 'axis_{event}'")
+                    sum_row = event_row[self.cols] + row[self.cols]
+                    sum_row['label'] = f'{row["label"]}_{event}'
+                    sum_row['type'] = row['type']
+
+                    # append it
+                    df_all_embeddings = pd.concat([df_all_embeddings, sum_row], ignore_index=True)
+            elif row['type'] == 'DrillingMotor':
+                # iterate through axis events
+                for event in self.embedding_events['drillingMotor']:
+                    event_row = builded_embeddings['typeEvent'].query(f"label == 'motor_{event}'")
+                    sum_row = event_row[self.cols] + row[self.cols]
+                    sum_row['label'] = f'{row["label"]}_{event}'
+                    sum_row['type'] = row['type']
+
+                    # append it
+                    df_all_embeddings = pd.concat([df_all_embeddings, sum_row], ignore_index=True)
+            
+            elif row['type'] == 'FreqConverter':
+                # iterate through axis events
+                for event in self.embedding_events['freqConv']:
+                    event_row = builded_embeddings['typeEvent'].query(f"label == 'motor_{event}'")
+                    sum_row = event_row[self.cols] + row[self.cols]
+                    sum_row['label'] = f'{row["label"]}_{event}'
+                    sum_row['type'] = row['type']
+
+                    # append it
+                    df_all_embeddings = pd.concat([df_all_embeddings, sum_row], ignore_index=True)
+            elif row['type'] == 'MagneticValve':
+                # iterate through axis events
+                for event in self.embedding_events['valve']:
+                    event_row = builded_embeddings['typeEvent'].query(f"label == 'mValve_{event}'")
+                    sum_row = event_row[self.cols] + row[self.cols]
+                    sum_row['label'] = f'{row["label"]}_{event}'
+                    sum_row['type'] = row['type']
+
+                    # append it
+                    df_all_embeddings = pd.concat([df_all_embeddings, sum_row], ignore_index=True)
+            elif row['type'] == 'ImpulseValve':
+                # iterate through axis events
+                for event in self.embedding_events['valve']:
+                    event_row = builded_embeddings['typeEvent'].query(f"label == 'iValve_{event}'")
+                    sum_row = event_row[self.cols] + row[self.cols]
+                    sum_row['label'] = f'{row["label"]}_{event}'
+                    sum_row['type'] = row['type']
+
+                    # append it
+                    df_all_embeddings = pd.concat([df_all_embeddings, sum_row], ignore_index=True)
+            elif row['type'] == 'Sensor':
+
+                sum_row = row[self.cols]
+                sum_row['label'] = f'{row["label"]}_Sensor'
+                sum_row['type'] = row['type']
+
+                # append it
+                df_all_embeddings = pd.concat([df_all_embeddings, sum_row], ignore_index=True)
+            elif row['label'] == 'Mode':
+                # iterate through axis events
+                for event in self.embedding_events['mode']:
+                    event_row = builded_embeddings['typeEvent'].query(f"label == 'mode_{event}'")
+                    sum_row = event_row[self.cols] + row[self.cols]
+                    sum_row['label'] = f'{row["label"]}_{event}'
+                    sum_row['type'] = row['label']
+
+                    # append it
+                    df_all_embeddings = pd.concat([df_all_embeddings, sum_row], ignore_index=True)
+
+
+        df_all_embeddings[self.cols] = df_all_embeddings[self.cols].apply(pd.to_numeric)
+        
+        lbls = df_all_embeddings[['label', 'type']].values
+        embed_space = torch.from_numpy(df_all_embeddings[self.cols].values)
+
+        # self.embedding_events['']
+        # builded_embeddings['typeEvent']
+        self.writer['typeEventID'].add_embedding(embed_space, metadata=lbls, global_step=self.trainer.global_step)
+
+        return super().on_train_epoch_end()
 
     def predict(
         self,
