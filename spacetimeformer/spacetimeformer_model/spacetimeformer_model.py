@@ -1,20 +1,11 @@
 from typing import Tuple
-from spacetimeformer.data.decker_format.tensorboard_writer import tensorboardWriter
 
 import torch
-from torch import nn
-import torch.nn.functional as F
-import pytorch_lightning as pl
-import torchmetrics
-import pandas as pd
-import numpy as np
-import wandb
-from torch.utils.tensorboard import SummaryWriter
 import spacetimeformer as stf
 
 
 
-class Spacetimeformer_Forecaster(stf.Forecaster):
+class Spacetimeformer_Predictor(stf.Predictor):
     def __init__(
         self,
         d_y: int = 1,
@@ -195,7 +186,7 @@ class Spacetimeformer_Forecaster(stf.Forecaster):
         x_c, y_c, x_t, y_t = batch
         outputs, (logits, labels) = self(x_c, y_c, x_t, y_t, **forward_kwargs)
 
-        forecast_loss, mask = self.forecasting_loss(
+        forecast_loss, mask = self.prediction_loss(
             outputs=outputs, y_t=y_t, time_mask=time_mask
         )
 
@@ -272,12 +263,7 @@ class Spacetimeformer_Forecaster(stf.Forecaster):
     @classmethod
     def add_cli(self, parser):
         super().add_cli(parser)
-        # parser.add_argument(
-        #     "--start_token_len",
-        #     type=int,
-        #     required=True,
-        #     help="Length of decoder start token. Adds this many of the final context points to the start of the target sequence.",
-        # )
+
         parser.add_argument(
             "--d_model", type=int, default=256, help="Transformer embedding dimension."
         )
@@ -437,12 +423,6 @@ class Spacetimeformer_Forecaster(stf.Forecaster):
             default=0,
             help="Add downsampling Conv1Ds between encoder layers.",
         )
-        # parser.add_argument(
-        #     "--time_emb_dim",
-        #     type=int,
-        #     default=12,
-        #     help="Time embedding dimension. Embed *each dimension of x* with this many learned periodic values.",
-        # )
         parser.add_argument(
             "--performer_kernel",
             type=str,
@@ -456,10 +436,3 @@ class Spacetimeformer_Forecaster(stf.Forecaster):
             default=125,
             help="Training steps between resampling orthogonal random features for FAVOR+ attention",
         )
-        # parser.add_argument(
-        #     "--embed_method",
-        #     type=str,
-        #     choices=["spatio-temporal", "temporal", "spatio-temporal-event"],
-        #     default="spatio-temporal",
-        #     help="Embedding method. spatio-temporal enables long-sequence spatio-temporal transformer mode while temporal recovers default architecture.",
-        # )

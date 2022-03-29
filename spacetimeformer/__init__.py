@@ -1,6 +1,6 @@
 from . import data
 from .time2vec import Time2Vec
-from .forecaster import Forecaster
+from .predictor import Predictor
 from . import lr_scheduler
 from . import callbacks
 from . import eval_stats

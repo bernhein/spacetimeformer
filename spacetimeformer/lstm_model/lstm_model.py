@@ -102,7 +102,7 @@ class LSTM_Seq2Seq(nn.Module):
         return outputs
 
 
-class LSTM_Forecaster(stf.Forecaster):
+class LSTM_Predictor(stf.Predictor):
     def __init__(
         self,
         d_x: int = 6,

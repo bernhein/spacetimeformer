@@ -36,10 +36,10 @@ def create_parser():
     stf.data.DataModule.add_cli(parser)
 
     if model == "lstm":
-        stf.lstm_model.LSTM_Forecaster.add_cli(parser)
+        stf.lstm_model.LSTM_Predictor.add_cli(parser)
         stf.callbacks.TeacherForcingAnnealCallback.add_cli(parser)
     elif model == "spacetimeformer":
-        stf.spacetimeformer_model.Spacetimeformer_Forecaster.add_cli(parser)
+        stf.spacetimeformer_model.Spacetimeformer_Predictor.add_cli(parser)
 
     stf.callbacks.TimeMaskedLossCallback.add_cli(parser)
 
@@ -73,7 +73,7 @@ def create_model(config):
     assert y_dim is not None
 
     if config.model == "lstm":
-        forecaster = stf.lstm_model.LSTM_Forecaster(
+        forecaster = stf.lstm_model.LSTM_Predictor(
             # encoder
             d_x=x_dim,
             d_y=y_dim,
@@ -92,7 +92,7 @@ def create_model(config):
             comment=args.run_name,
         )
     elif config.model == "spacetimeformer":
-        forecaster = stf.spacetimeformer_model.Spacetimeformer_Forecaster(
+        forecaster = stf.spacetimeformer_model.Spacetimeformer_Predictor(
             d_y=y_dim,
             d_x=x_dim,
             # start_token_len=config.start_token_len,

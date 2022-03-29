@@ -1,1 +1,1 @@
-from .lstm_model import LSTM_Forecaster
+from .lstm_model import LSTM_Predictor

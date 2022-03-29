@@ -14,7 +14,7 @@ import wandb
 from spacetimeformer.data.decker_format.tensorboard_writer import tensorboardWriter
 from torch.utils.tensorboard import SummaryWriter
 
-class Forecaster(pl.LightningModule, ABC):
+class Predictor(pl.LightningModule, ABC):
     def __init__(
         self,
         learning_rate: float = 1e-3,
@@ -87,7 +87,7 @@ class Forecaster(pl.LightningModule, ABC):
         else:
             raise ValueError(f"Unrecognized Loss Function : {self.loss}")
 
-    def forecasting_loss(
+    def prediction_loss(
         self, outputs: torch.Tensor, y_t: torch.Tensor, time_mask: int
     ) -> Tuple[torch.Tensor]:
         if self.null_value is not None:
@@ -113,7 +113,7 @@ class Forecaster(pl.LightningModule, ABC):
         x_c, y_c, x_t, y_t = batch
         outputs, *_ = self(x_c, y_c, x_t, y_t, **forward_kwargs)
 
-        loss, mask = self.forecasting_loss(
+        loss, mask = self.prediction_loss(
             outputs=outputs, y_t=y_t, time_mask=time_mask
         )
         return loss, outputs, mask
