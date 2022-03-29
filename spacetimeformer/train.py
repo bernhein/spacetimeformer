@@ -66,8 +66,8 @@ def create_model(config):
     x_dim, y_dim = None, None
     # @todo configure dataset decker
     if config.dset == "decker":
-        x_dim = 4
-        y_dim = 7
+        x_dim = 4 # hour, minute, microsecond, timestamp: 
+        y_dim = 7 # val_0, val_1, val_2, val_3, sourceType, id, event
 
     assert x_dim is not None
     assert y_dim is not None
@@ -141,7 +141,7 @@ def create_dset(config):
 
     
     #data_path = config.data_path
-    data_path = "/home/hein/MasterThesis/MasterThesis/Preprocessing/TrainData/2022.02.03"
+    data_path = "/home/hein/MasterThesis/MasterThesis/Preprocessing/TrainData/"
     target_cols = [
             "val_0",
             "val_1",

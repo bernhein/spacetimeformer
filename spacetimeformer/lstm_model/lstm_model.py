@@ -117,9 +117,6 @@ class LSTM_Predictor(stf.Predictor):
         l2_coeff: float = 0,
         loss: str = "mse",
         linear_window: int = 0,
-        # embed_method: str = "spatio-temporal-event",  # embedding method
-        # initial_downsample_convs: int = 0,      # initial downsampling convs
-        # start_token_len: int = 64,              # length of the start token
         null_value: float = None,               # null value
         d_model: int = 256,
         comment: str = "lstm",

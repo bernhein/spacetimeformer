@@ -13,6 +13,7 @@ import numpy as np
 import wandb
 from spacetimeformer.data.decker_format.tensorboard_writer import tensorboardWriter
 from torch.utils.tensorboard import SummaryWriter
+import random
 
 class Predictor(pl.LightningModule, ABC):
     def __init__(
@@ -99,7 +100,16 @@ class Predictor(pl.LightningModule, ABC):
         if time_mask is not None:
             time_mask_mat[:, time_mask:] = False
 
-        full_mask = time_mask_mat * null_mask_mat
+
+        # Take randomly all (values 0 to 3, sourceType, id, event) or only the predicted values 0 to 3 into consideration 
+        batch_size, len, _ = time_mask_mat.shape
+        if random.random() > 0.8:
+            filterMask_mat = torch.cat((torch.ones(batch_size,len,4), torch.zeros(batch_size,len,3)), -1).to(time_mask_mat.device)
+        else:
+            filterMask_mat = torch.ones(batch_size,len,7).to(time_mask_mat.device)
+
+
+        full_mask = time_mask_mat * null_mask_mat * filterMask_mat
         forecasting_loss = self.loss_fn(y_t, outputs, full_mask)
 
         return forecasting_loss, full_mask
@@ -175,8 +185,6 @@ class Predictor(pl.LightningModule, ABC):
         ################################
         # build combinations of event and type and id embeddings 
 
-
-        df_axis = pd.DataFrame(columns=self.cols + ['label', 'type'])
         empty_row = {'label': [], 'type': []}
         empty_row.update({x: [] for x in self.cols})
 
