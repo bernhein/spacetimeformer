@@ -18,9 +18,9 @@ _DSETS = [
 ]
 
 
-def create_parser():
-    model = sys.argv[1]
-    dset = sys.argv[2]
+def create_parser(p):
+    model = p[0]
+    dset = p[1]
 
     # Throw error now before we get confusing parser issues
     assert (
@@ -312,12 +312,36 @@ def main(args):
 
     experiment.finish()
 
+
+hyper_parameters = [
+    ["lstm", "decker", "--context_points", "500", "--target_points", "100", "--grad_clip_norm", "1", "--gpus", "0", "--batch_size", "256", "--d_model", "96", "--l2_coeff", ".01","--run_name", "lstm_d96_c500-t100-mae", "--loss", "mae", "--time_resolution", "1", "--debug", "--early_stopping", "--wandb"],
+    ["lstm", "decker", "--context_points", "500", "--target_points", "100", "--grad_clip_norm", "1", "--gpus", "0", "--batch_size", "256", "--d_model", "64", "--l2_coeff", ".01","--run_name", "lstm_d64_c500-t100-mae", "--loss", "mae", "--time_resolution", "1", "--debug", "--early_stopping", "--wandb"],
+    ["lstm", "decker", "--context_points", "500", "--target_points", "100", "--grad_clip_norm", "1", "--gpus", "0", "--batch_size", "256", "--d_model", "96", "--l2_coeff", ".01","--run_name", "lstm_d96_c500-t100-mse", "--loss", "mse", "--time_resolution", "1", "--debug", "--early_stopping", "--wandb"],
+    ["lstm", "decker", "--context_points", "500", "--target_points", "100", "--grad_clip_norm", "1", "--gpus", "0", "--batch_size", "256", "--d_model", "64", "--l2_coeff", ".01","--run_name", "lstm_d64_c500-t100-mse", "--loss", "mse", "--time_resolution", "1", "--debug", "--early_stopping", "--wandb"],
+    ["spacetimeformer", "decker", "--context_points", "500", "--target_points", "100", "--grad_clip_norm", "1", "--gpus", "0", "--batch_size", "256", "--d_model", "96", "--d_ff", "400", "--enc_layers", "3", "--dec_layers", "3", "--local_cross_attn", "none", "--local_self_attn", "none", "--l2_coeff", ".01", "--dropout_emb", ".1", "--run_name", "stf_d96_c500-t100-h8-mae", "--loss", "mae", "--time_resolution", "1", "--dropout_ff", ".2", "--n_heads", "8", "--debug", "--early_stopping", "--wandb", "--attn_plot"],
+    ["spacetimeformer", "decker", "--context_points", "500", "--target_points", "100", "--grad_clip_norm", "1", "--gpus", "0", "--batch_size", "256", "--d_model", "64", "--d_ff", "400", "--enc_layers", "3", "--dec_layers", "3", "--local_cross_attn", "none", "--local_self_attn", "none", "--l2_coeff", ".01", "--dropout_emb", ".1", "--run_name", "stf_d64_c500-t100-h8-mae", "--loss", "mae", "--time_resolution", "1", "--dropout_ff", ".2", "--n_heads", "8", "--debug", "--early_stopping", "--wandb", "--attn_plot"],
+    ["spacetimeformer", "decker", "--context_points", "500", "--target_points", "100", "--grad_clip_norm", "1", "--gpus", "0", "--batch_size", "256", "--d_model", "96", "--d_ff", "400", "--enc_layers", "3", "--dec_layers", "3", "--local_cross_attn", "none", "--local_self_attn", "none", "--l2_coeff", ".01", "--dropout_emb", ".1", "--run_name", "stf_d96_c500-t100-h4-mae", "--loss", "mae", "--time_resolution", "1", "--dropout_ff", ".2", "--n_heads", "4", "--debug", "--early_stopping", "--wandb", "--attn_plot"],
+    ["spacetimeformer", "decker", "--context_points", "500", "--target_points", "100", "--grad_clip_norm", "1", "--gpus", "0", "--batch_size", "256", "--d_model", "64", "--d_ff", "400", "--enc_layers", "3", "--dec_layers", "3", "--local_cross_attn", "none", "--local_self_attn", "none", "--l2_coeff", ".01", "--dropout_emb", ".1", "--run_name", "stf_d64_c500-t100-h4-mae", "--loss", "mae", "--time_resolution", "1", "--dropout_ff", ".2", "--n_heads", "4", "--debug", "--early_stopping", "--wandb", "--attn_plot"],
+    ["spacetimeformer", "decker", "--context_points", "500", "--target_points", "100", "--grad_clip_norm", "1", "--gpus", "0", "--batch_size", "256", "--d_model", "96", "--d_ff", "400", "--enc_layers", "3", "--dec_layers", "3", "--local_cross_attn", "none", "--local_self_attn", "none", "--l2_coeff", ".01", "--dropout_emb", ".1", "--run_name", "stf_d96_c500-t100-h8-mse", "--loss", "mse", "--time_resolution", "1", "--dropout_ff", ".2", "--n_heads", "8", "--debug", "--early_stopping", "--wandb", "--attn_plot"],
+    ["spacetimeformer", "decker", "--context_points", "500", "--target_points", "100", "--grad_clip_norm", "1", "--gpus", "0", "--batch_size", "256", "--d_model", "64", "--d_ff", "400", "--enc_layers", "3", "--dec_layers", "3", "--local_cross_attn", "none", "--local_self_attn", "none", "--l2_coeff", ".01", "--dropout_emb", ".1", "--run_name", "stf_d64_c500-t100-h8-mse", "--loss", "mse", "--time_resolution", "1", "--dropout_ff", ".2", "--n_heads", "8", "--debug", "--early_stopping", "--wandb", "--attn_plot"],
+    ["spacetimeformer", "decker", "--context_points", "500", "--target_points", "100", "--grad_clip_norm", "1", "--gpus", "0", "--batch_size", "256", "--d_model", "96", "--d_ff", "400", "--enc_layers", "3", "--dec_layers", "3", "--local_cross_attn", "none", "--local_self_attn", "none", "--l2_coeff", ".01", "--dropout_emb", ".1", "--run_name", "stf_d96_c500-t100-h4-mse", "--loss", "mse", "--time_resolution", "1", "--dropout_ff", ".2", "--n_heads", "4", "--debug", "--early_stopping", "--wandb", "--attn_plot"],
+    ["spacetimeformer", "decker", "--context_points", "500", "--target_points", "100", "--grad_clip_norm", "1", "--gpus", "0", "--batch_size", "256", "--d_model", "64", "--d_ff", "400", "--enc_layers", "3", "--dec_layers", "3", "--local_cross_attn", "none", "--local_self_attn", "none", "--l2_coeff", ".01", "--dropout_emb", ".1", "--run_name", "stf_d64_c500-t100-h4-mse", "--loss", "mse", "--time_resolution", "1", "--dropout_ff", ".2", "--n_heads", "4", "--debug", "--early_stopping", "--wandb", "--attn_plot"],
+]
+
 wandb.tensorboard.patch(save=False, tensorboardX=True, root_logdir="./spacetimeformer/spacetimeformer/data/stf_LOG_DIR")
 
 if __name__ == "__main__":
     # CLI
-    parser = create_parser()
-    args = parser.parse_args()
+    
 
-    for trial in range(args.trials):
-        main(args)
+    for params in hyper_parameters:
+        parser = create_parser(params)
+
+        args = parser.parse_args(params)
+
+        # for trial in range(args.trials):
+        try:
+            main(args)
+        except:
+            print("failed for following args:")
+            print(args)

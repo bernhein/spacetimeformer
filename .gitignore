@@ -1,4 +1,6 @@
 ./data/stf_model_checkpoints
+spacetimeformer/data/stf_model_checkpoints/
+spacetimeformer/data/stf_model_checkpoints_old/
 # cache for test output
 .cache
 
@@ -48,4 +50,3 @@ checkpoints/
 
 .vscode
 *.csv
-spacetimeformer/data/stf_model_checkpoints/
