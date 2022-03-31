@@ -17,6 +17,7 @@ _DSETS = [
     "decker"
 ]
 
+
 def create_parser():
     model = sys.argv[1]
     dset = sys.argv[2]
@@ -236,7 +237,7 @@ def main(args):
         your wandb user/organization name and project title, respectively."
     
     
-    wandb.tensorboard.patch(save=False, tensorboardX=True, root_logdir="./spacetimeformer/spacetimeformer/data/stf_LOG_DIR")
+    
     experiment = wandb.init(
         project=project,
         entity=entity,
@@ -311,6 +312,7 @@ def main(args):
 
     experiment.finish()
 
+wandb.tensorboard.patch(save=False, tensorboardX=True, root_logdir="./spacetimeformer/spacetimeformer/data/stf_LOG_DIR")
 
 if __name__ == "__main__":
     # CLI

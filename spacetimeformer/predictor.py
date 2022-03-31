@@ -103,13 +103,13 @@ class Predictor(pl.LightningModule, ABC):
 
         # Take randomly all (values 0 to 3, sourceType, id, event) or only the predicted values 0 to 3 into consideration 
         batch_size, len, _ = time_mask_mat.shape
-        if random.random() > 0.8:
+        if random.random() > 0.8 and False: # Do not this part!
             filterMask_mat = torch.cat((torch.ones(batch_size,len,4), torch.zeros(batch_size,len,3)), -1).to(time_mask_mat.device)
         else:
             filterMask_mat = torch.ones(batch_size,len,7).to(time_mask_mat.device)
 
 
-        full_mask = time_mask_mat * null_mask_mat * filterMask_mat
+        full_mask = time_mask_mat * null_mask_mat # * filterMask_mat
         forecasting_loss = self.loss_fn(y_t, outputs, full_mask)
 
         return forecasting_loss, full_mask
@@ -185,19 +185,33 @@ class Predictor(pl.LightningModule, ABC):
         ################################
         # build combinations of event and type and id embeddings 
 
-        empty_row = {'label': [], 'type': []}
+        empty_row = {'label': []}
         empty_row.update({x: [] for x in self.cols})
 
         df_empty_row = pd.DataFrame(empty_row)
+        zero_event_row = {'label': ['']}
+        zero_event_row.update({x: [0] for x in self.cols})
+        df_zero_event_row = pd.DataFrame(zero_event_row)
+        zero_event_row = df_zero_event_row.loc[0,self.cols]
+
+        df_empty_row = pd.DataFrame(empty_row)
         df_all_embeddings = df_empty_row.copy()
+
+        def getLocation(motor:bool=True, by:str="LogfileName",val:str=""):
+            if motor:
+                values = self.motors_data.query(f"{by} == '{val}'").iloc[0]
+            else:
+                values = self.valves_data.query(f"{by} == '{val}'").iloc[0]
+
+            return f"-{values['location']}"
+
         for idx, row in builded_embeddings['id'].iterrows():
             if row['type'] == 'Axis':
                 # iterate through axis events
                 for event in self.embedding_events['axis']:
                     event_row = builded_embeddings['typeEvent'].query(f"label == 'axis_{event}'")
                     sum_row = event_row[self.cols] + row[self.cols]
-                    sum_row['label'] = f'{row["label"]}_{event}'
-                    sum_row['type'] = row['type']
+                    sum_row['label'] = f'{row["label"]} {event} {row["type"]} {getLocation(by="LogfileName",val=row["label"])}'
 
                     # append it
                     df_all_embeddings = pd.concat([df_all_embeddings, sum_row], ignore_index=True)
@@ -206,8 +220,7 @@ class Predictor(pl.LightningModule, ABC):
                 for event in self.embedding_events['drillingMotor']:
                     event_row = builded_embeddings['typeEvent'].query(f"label == 'motor_{event}'")
                     sum_row = event_row[self.cols] + row[self.cols]
-                    sum_row['label'] = f'{row["label"]}_{event}'
-                    sum_row['type'] = row['type']
+                    sum_row['label'] = f'{row["label"]} {event} {row["type"]} {getLocation(by="LogfileName",val=row["label"])}'
 
                     # append it
                     df_all_embeddings = pd.concat([df_all_embeddings, sum_row], ignore_index=True)
@@ -215,10 +228,9 @@ class Predictor(pl.LightningModule, ABC):
             elif row['type'] == 'FreqConverter':
                 # iterate through axis events
                 for event in self.embedding_events['freqConv']:
-                    event_row = builded_embeddings['typeEvent'].query(f"label == 'motor_{event}'")
+                    event_row = builded_embeddings['typeEvent'].query(f"label == 'FC_{event}'")
                     sum_row = event_row[self.cols] + row[self.cols]
-                    sum_row['label'] = f'{row["label"]}_{event}'
-                    sum_row['type'] = row['type']
+                    sum_row['label'] = f'{row["label"]} {event} {row["type"]} {getLocation(by="LogfileName",val=row["label"])}'
 
                     # append it
                     df_all_embeddings = pd.concat([df_all_embeddings, sum_row], ignore_index=True)
@@ -227,8 +239,7 @@ class Predictor(pl.LightningModule, ABC):
                 for event in self.embedding_events['valve']:
                     event_row = builded_embeddings['typeEvent'].query(f"label == 'mValve_{event}'")
                     sum_row = event_row[self.cols] + row[self.cols]
-                    sum_row['label'] = f'{row["label"]}_{event}'
-                    sum_row['type'] = row['type']
+                    sum_row['label'] = f'{row["label"]} {event} {row["type"]} {getLocation(motor=False,by="LogfileName",val=row["label"])}'
 
                     # append it
                     df_all_embeddings = pd.concat([df_all_embeddings, sum_row], ignore_index=True)
@@ -237,26 +248,26 @@ class Predictor(pl.LightningModule, ABC):
                 for event in self.embedding_events['valve']:
                     event_row = builded_embeddings['typeEvent'].query(f"label == 'iValve_{event}'")
                     sum_row = event_row[self.cols] + row[self.cols]
-                    sum_row['label'] = f'{row["label"]}_{event}'
-                    sum_row['type'] = row['type']
+                    sum_row['label'] = f'{row["label"]} {event} {row["type"]} {getLocation(motor=False,by="LogfileName",val=row["label"])}'
 
                     # append it
                     df_all_embeddings = pd.concat([df_all_embeddings, sum_row], ignore_index=True)
             elif row['type'] == 'Sensor':
 
-                sum_row = row[self.cols]
-                sum_row['label'] = f'{row["label"]}_Sensor'
-                sum_row['type'] = row['type']
+                row_vals = {}
+                for col in self.cols:
+                    row_vals[col] = [row[col]]
+                row_vals['label'] = [f'{row["label"]} Sensor {getLocation(by="SensorBMK",val=row["label"])}']
 
                 # append it
-                df_all_embeddings = pd.concat([df_all_embeddings, sum_row], ignore_index=True)
+                df_row_vals = pd.DataFrame(row_vals)
+                df_all_embeddings = pd.concat([df_all_embeddings, df_row_vals], ignore_index=True)
             elif row['label'] == 'Mode':
                 # iterate through axis events
                 for event in self.embedding_events['mode']:
                     event_row = builded_embeddings['typeEvent'].query(f"label == 'mode_{event}'")
                     sum_row = event_row[self.cols] + row[self.cols]
-                    sum_row['label'] = f'{row["label"]}_{event}'
-                    sum_row['type'] = row['label']
+                    sum_row['label'] = f'{row["label"]} {event} {row["type"]}'
 
                     # append it
                     df_all_embeddings = pd.concat([df_all_embeddings, sum_row], ignore_index=True)
@@ -264,11 +275,9 @@ class Predictor(pl.LightningModule, ABC):
 
         df_all_embeddings[self.cols] = df_all_embeddings[self.cols].apply(pd.to_numeric)
         
-        lbls = df_all_embeddings[['label', 'type']].values
+        lbls = df_all_embeddings['label'].values
         embed_space = torch.from_numpy(df_all_embeddings[self.cols].values)
 
-        # self.embedding_events['']
-        # builded_embeddings['typeEvent']
         self.writer['typeEventID'].add_embedding(embed_space, metadata=lbls, global_step=self.trainer.global_step)
 
         return super().on_train_epoch_end()
