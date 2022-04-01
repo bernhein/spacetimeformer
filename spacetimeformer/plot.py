@@ -13,7 +13,7 @@ import torch
 import wandb
 
 from spacetimeformer.eval_stats import mape
-
+torch.cuda.empty_cache()
 
 def _assert_squeeze(x):
     assert len(x.shape) == 2
