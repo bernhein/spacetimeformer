@@ -19,7 +19,7 @@ class SpacetimeformerEmbedding(nn.Module):
         
         self.x_embedder = stf.Time2Vec(d_x, embed_dim=d_model)
         self.typeEvnt_embedder   = nn.Embedding(num_embeddings=54, embedding_dim=d_model) # sourceType & eventName
-        self.id_embedder         = nn.Embedding(num_embeddings=75, embedding_dim=d_model) # id
+        self.id_embedder         = nn.Embedding(num_embeddings=75, embedding_dim=d_model) # in the paper refered as name
         self.typeVal_0_embedder    = FeedForwardNetwork(input=2,hidden=ceil(d_model/2),output=d_model) # sourceType & value & value idx (0..3)
         self.typeVal_1_embedder    = FeedForwardNetwork(input=2,hidden=ceil(d_model/2),output=d_model)
         self.typeVal_2_embedder    = FeedForwardNetwork(input=2,hidden=ceil(d_model/2),output=d_model)

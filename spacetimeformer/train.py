@@ -335,7 +335,6 @@ wandb.tensorboard.patch(save=False, tensorboardX=True, root_logdir="./spacetimef
 
 if __name__ == "__main__":
     # CLI
-    
 
     for params in hyper_parameters:
         parser = create_parser(params)

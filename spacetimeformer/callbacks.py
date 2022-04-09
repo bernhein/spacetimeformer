@@ -214,6 +214,6 @@ class EmbeddingCallback(pl.Callback):
             model.logger.log({f'{embedding_type}': table})
 
 
-    def on_epoch_end(self, trainer, pl_module):
-        print('Test')
+    # def on_epoch_end(self, trainer, pl_module):
+    #     print('Test')
         
